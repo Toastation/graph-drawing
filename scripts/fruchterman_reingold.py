@@ -2,7 +2,7 @@
 from tulip import tlp
 import math
 
-ITERATIONS = 100
+ITERATIONS = 1000
 
 def repulsive_force(dist, k):
     return (k * k) / dist
@@ -24,10 +24,11 @@ def main(graph):
     area = width * height
     min_coord = boundingbox[0]
     max_coord = boundingbox[1]
-
+    
     layout = graph.getLayoutProperty("viewLayout")
     forces = graph.getLayoutProperty("forces")          # node:tlp.Vec3f dict representing the total forces applied on each node 
     nb_nodes = graph.numberOfNodes()
+    
     k = math.sqrt(area / nb_nodes)                      # ideal length between nodes given the above force model 
     temp = min(width, height) / 10
     dt = temp / (ITERATIONS + 1)
@@ -62,8 +63,7 @@ def main(graph):
             if force != 0:
                 displacement = min(force, temp) / force
                 layout[n] += forces[n] * displacement
-                #layout[n].setX(min(min_coord.x(), max(max_coord.x(), layout[n].x())))
-                #layout[n].setY(min(min_coord.y(), max(max_coord.y(), layout[n].y())))                
+                layout[n].setX(min(min_coord.x(), max(max_coord.x(), layout[n].x())))
+                layout[n].setY(min(min_coord.y(), max(max_coord.y(), layout[n].y())))                
             forces[n].fill(0)
-
         temp = cool(temp, dt)
