@@ -2,56 +2,68 @@
 from tulip import tlp
 import math
 
-# TODO : get width and height from the user
-WIDTH = 100
-HEIGHT = 100
-AREA = WIDTH * WIDTH
-ITERATIONS = 1000  
+ITERATIONS = 100
 
-def repulsive_force(pos, k):
-    return (k * k) / pos
+def repulsive_force(dist, k):
+    return (k * k) / dist
   
-def attractive_force(pos, k):
-    return (pos * pos) / k
+def attractive_force(dist, k):
+    return (dist * dist) / k
 
-def cool(temp):
-    temp -= 1 / temp
+def cool(temp, dt):
+    temp -= dt      # TODO: experiment with non-linear cooling
     return temp if temp >= 0 else 0
 
 def normalize_vec3f(vec):
     return vec / vec.norm()
 
-def main(graph):  
+def main(graph):
+    boundingbox = tlp.computeBoundingBox(graph) 
+    width = boundingbox.width()
+    height = boundingbox.height()
+    area = width * height
+    min_coord = boundingbox[0]
+    max_coord = boundingbox[1]
+
     layout = graph.getLayoutProperty("viewLayout")
     forces = graph.getLayoutProperty("forces")          # node:tlp.Vec3f dict representing the total forces applied on each node 
     nb_nodes = graph.numberOfNodes()
-    k = math.sqrt(AREA / nb_nodes)                      # ideal length between nodes given the above force model 
-    temp = min(WIDTH, HEIGHT) / 10
+    k = math.sqrt(area / nb_nodes)                      # ideal length between nodes given the above force model 
+    temp = min(width, height) / 10
+    dt = temp / (ITERATIONS + 1)
+
+    # init forces
+    for n in graph.nodes():
+        forces[n] = tlp.Vec3f()
 
     for i in range(ITERATIONS):
         # computing repulsive forces for every pair of nodes
-        for index_n, n in enumerate(graph.nodes()[:nb_nodes]):
-            forces[n] = tlp.Vec3f()
-            for n2 in graph.nodes()[index_n+1:]:
-                delta_pos = layout[n] - layout[n2]
-                force = normalize_vec3f(delta_pos) * repulsive_force(delta_pos.norm(), k)
-                forces[n] += force
-                forces[n2] -= force
+        for n in graph.getNodes():
+            for n2 in graph.getNodes():
+                if n != n2:
+                    delta_pos = layout[n] - layout[n2]
+                    dist = delta_pos.norm()
+                    if dist != 0:
+                        forces[n] += delta_pos * (repulsive_force(dist, k) / dist)
 
         # computing attractive forces for every edge
         for e in graph.getEdges():
             source = graph.source(e)
             target = graph.target(e)
             delta_pos = layout[source] - layout[target]
-            force = normalize_vec3f(delta_pos) * attractive_force(delta_pos.norm(), k)
-            forces[source] -= force
-            forces[target] += force
-    
+            dist = delta_pos.norm()
+            force = attractive_force(dist, k) / dist 
+            forces[source] -= delta_pos * force
+            forces[target] += delta_pos * force
+
         # updating nodes position and keeping them in-bound
         for n in graph.getNodes():
-            layout[n] += normalize_vec3f(forces[n]) * min(forces[n].norm(), temp)
-            layout[n].setX(min(WIDTH, max(0, layout[n].x())))  
-            layout[n].setY(min(HEIGHT, max(0, layout[n].y())))
-            
-        temp = cool(temp)
-        if temp == 0: break
+            force = forces[n].norm()
+            if force != 0:
+                displacement = min(force, temp) / force
+                layout[n] += forces[n] * displacement
+                #layout[n].setX(min(min_coord.x(), max(max_coord.x(), layout[n].x())))
+                #layout[n].setY(min(min_coord.y(), max(max_coord.y(), layout[n].y())))                
+            forces[n].fill(0)
+
+        temp = cool(temp, dt)
