@@ -8,9 +8,7 @@ PARTITION_SIZE = 5
 def main(graph):
     layout = graph.getLayoutProperty("viewLayout")
     partitions = deque([graph.nodes()])
-
     quit = False
-    count = 0
 
     while not quit:
         nb_partitions = len(partitions)
@@ -29,10 +27,6 @@ def main(graph):
             # terminate when we have reached the ideal partition size 
             if p_size // 2 <= PARTITION_SIZE: 
                 quit = True
-                
-            print("p_size: {}".format(p_size))
-        count += 1
-        print("count: {}".format(count))
     
     partitions = list(partitions)
     print(partitions)
