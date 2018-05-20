@@ -3,7 +3,6 @@ from collections import deque
 import math
 import random
 
-ITERATIONS = 4
 PARTITION_SIZE = 5
 
 def main(graph):
@@ -43,4 +42,4 @@ def main(graph):
         g = random.randrange(255)
         b = random.randrange(255)
         for n in p:
-            colors[n] = tlp.Color(r, g, b)  
+            colors[n] = tlp.Color(r, g, b)
