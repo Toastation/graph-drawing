@@ -1,3 +1,5 @@
+# TODO: create a set of randomly generated graphs via the tulip API
+
 from tulip import tlp
 import profile
 import pstats
@@ -20,18 +22,20 @@ def load_graphs(graphs):
 def profile_kd_tree_partitioning(graphs):
     global profile_name
     save_path = PROFILING_LOCATION+"profiling_kd_tree_part_"
+    min_partition_size = 5
     for i in graphs:
-        save_name = save_path+"n{}_e{}".format(i.numberOfNodes(), i.numberOfEdges())
+        save_name = save_path+"n{}_e{}_p{}".format(i.numberOfNodes(), i.numberOfEdges(), min_partition_size)
         profile_name.append(save_name)
-        profile.runctx("kd_tree_partitioning.main(graph)", globals(), {"graph":i}, save_name)
+        profile.runctx("kd_tree_partitioning.run(graph, min_partition_size)", globals(), {"graph":i, "min_partition_size":min_partition_size}, save_name)
 
 def profile_fr(graphs):
     global profile_name
     save_path = PROFILING_LOCATION+"profiling_fr_"
+    iterations = 100
     for i in graphs:
         save_name = save_path+"n{}_e{}".format(i.numberOfNodes(), i.numberOfEdges())
         profile_name.append(save_name)
-        profile.runctx("fruchterman_reingold.main(graph)", globals(), {"graph":i}, save_name)
+        profile.runctx("fruchterman_reingold.main(graph, iterations)", globals(), {"graph":i, "iterations":iterations}, save_name)
 
 def main():
     graphs = []

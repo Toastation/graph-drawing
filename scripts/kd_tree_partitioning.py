@@ -1,15 +1,17 @@
+# TODO: use tulip subgraphs instead of lists of nodes
+
 from tulip import tlp
 from collections import deque
 import math
 import random
 
-PARTITION_SIZE = 5
+MIN_PARTITION_SIZE = 5
 
-def main(graph):
+# returns a list of list of nodes
+def run(graph, min_partition_size):
     layout = graph.getLayoutProperty("viewLayout")
     colors = graph.getColorProperty("viewColor")
     partitions = deque([graph.nodes()])
-
     quit = False
     count = 0
 
@@ -28,14 +30,15 @@ def main(graph):
             partitions.append(p[median_index:])
             
             # terminate when we have reached the ideal partition size 
-            if p_size // 2 <= PARTITION_SIZE: 
-                quit = True
-                
+            if p_size // 2 <= min_partition_size: quit = True               
         count += 1
-    
-    partitions = list(partitions)
+    return list(partitions)
+
+def main(graph):
+    partitions = run(graph, MIN_PARTITION_SIZE) 
     
     # DEBUG
+    colors = graph.getColorProperty("viewColor")
     print(partitions)
     for p in partitions:
         r = random.randrange(255)

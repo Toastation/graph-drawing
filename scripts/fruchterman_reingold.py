@@ -1,8 +1,8 @@
-# Basic version of the Fruchterman-Reingold algorithm
+# Basic version of the Fruchterman-Reingold algorithm, not efficient
 from tulip import tlp
 import math
 
-ITERATIONS = 1000
+ITERATIONS = 100
 
 def repulsive_force(dist, k):
     return (k * k) / dist
@@ -17,7 +17,7 @@ def cool(temp, dt):
 def normalize_vec3f(vec):
     return vec / vec.norm()
 
-def main(graph):
+def run(graph, iterations):
     boundingbox = tlp.computeBoundingBox(graph) 
     width = boundingbox.width()
     height = boundingbox.height()
@@ -44,7 +44,7 @@ def main(graph):
                 if n != n2:
                     delta_pos = layout[n] - layout[n2]
                     dist = delta_pos.norm()
-                    if dist != 0:
+                    if dist != 0: # TODO: push the nodes if dist == 0
                         forces[n] += delta_pos * (repulsive_force(dist, k) / dist)
 
         # computing attractive forces for every edge
@@ -53,9 +53,10 @@ def main(graph):
             target = graph.target(e)
             delta_pos = layout[source] - layout[target]
             dist = delta_pos.norm()
-            force = attractive_force(dist, k) / dist 
-            forces[source] -= delta_pos * force
-            forces[target] += delta_pos * force
+            if dist != 0: # randomly generated graphs may have edges that connect the same node...
+                force = attractive_force(dist, k) / dist 
+                forces[source] -= delta_pos * force
+                forces[target] += delta_pos * force
 
         # updating nodes position and keeping them in-bound
         for n in graph.getNodes():
@@ -67,3 +68,6 @@ def main(graph):
                 layout[n].setY(min(min_coord.y(), max(max_coord.y(), layout[n].y())))                
             forces[n].fill(0)
         temp = cool(temp, dt)
+
+def main(graph):
+    run(graph, ITERATIONS)
