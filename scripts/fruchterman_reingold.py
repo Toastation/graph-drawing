@@ -1,4 +1,3 @@
-# Basic version of the Fruchterman-Reingold algorithm, not efficient
 from tulip import tlp
 import math
 
@@ -17,6 +16,7 @@ def cool(temp, dt):
 def normalize_vec3f(vec):
     return vec / vec.norm()
 
+# basic implementation of the Fruchterman-Reingold algorithm, not efficient
 def run(graph, iterations):
     boundingbox = tlp.computeBoundingBox(graph) 
     width = boundingbox.width()
@@ -27,8 +27,8 @@ def run(graph, iterations):
     
     layout = graph.getLayoutProperty("viewLayout")
     forces = graph.getLayoutProperty("forces")          # node:tlp.Vec3f dict representing the total forces applied on each node 
-    nb_nodes = graph.numberOfNodes()
     
+    nb_nodes = graph.numberOfNodes()
     k = math.sqrt(area / nb_nodes)                      # ideal length between nodes given the above force model 
     temp = min(width, height) / 10
     dt = temp / (ITERATIONS + 1)

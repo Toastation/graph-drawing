@@ -35,7 +35,8 @@ def run(graph, min_partition_size):
     return list(partitions)
 
 def main(graph):
-    partitions = run(graph, MIN_PARTITION_SIZE) 
+    nb_nodes = graph.numberOfNodes()
+    partitions = run(graph, min_partition_size) 
     
     # DEBUG
     colors = graph.getColorProperty("viewColor")
