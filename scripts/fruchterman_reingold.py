@@ -25,7 +25,7 @@ def compute_partitions_CG(partitions, layout):
         partition_size = len(p)
         for n in p:
             cg += layout[n]
-        partitions_cg.append((p, cg/partition_size, len(p)))
+        partitions_cg.append((p, cg/partition_size))
     return partitions_cg
         
 def fr_2(graph, iterations):
@@ -42,7 +42,7 @@ def fr_2(graph, iterations):
     partitions = compute_partitions_CG(kd_tree_partitioning.run(graph, min_partition_size), layout)
 
     for i in range(iterations):
-        for (p, cg, s) in partitions:
+        for (p, cg) in partitions:
             for n in p:
                 if frac_done > pinning_weights[n]:
                     # computing repulsive forces for neighbor inside the partition
@@ -53,11 +53,11 @@ def fr_2(graph, iterations):
                             forces[n] += (K * K) * (delta_pos / (dist * dist))
                 
                     # computing repulsive forces between the node and the other partitions
-                    for (p2, cg2, s2) in partitions:
+                    for (p2, cg2) in partitions:
                         if p2 != p:
                             delta_pos = layout[n] - cg2
                             dist = delta_pos.norm()
-                            forces[n] += K * K * s2 * (delta_pos / (dist * dist))
+                            forces[n] += K * K * len(p2) * (delta_pos / (dist * dist))
 
         # computing attractives forces for every edge
         for e in graph.getEdges():
