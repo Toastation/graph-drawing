@@ -25,13 +25,13 @@ def compute_partitions_CG(partitions, layout):
         partition_size = len(p)
         for n in p:
             cg += layout[n]
-        partitions_cg.append((p, cg/partition_size), len(p))
+        partitions_cg.append((p, cg/partition_size, len(p)))
     return partitions_cg
         
 def fr_2(graph, iterations):
     layout = graph.getLayoutProperty("viewLayout")
     forces = graph.getLayoutProperty("forces")
-    pinning_weights = graph.getLayoutProperty("pinningWeight")
+    pinning_weights = graph.getDoubleProperty("pinningWeight")
 
     min_partition_size = 20
     frac_done = 0
@@ -64,7 +64,7 @@ def fr_2(graph, iterations):
             source = graph.source(e)
             target = graph.target(e)
             delta_pos = layout[source] - layout[target]
-            force = (dist / K) * delta_pos
+            force = (delta_pos.norm() / K) * delta_pos
             if frac_done > pinning_weights[source]:
                 forces[source] -= force
             if frac_done > pinning_weights[target]:            
@@ -73,9 +73,10 @@ def fr_2(graph, iterations):
         # updating positions
         for n in graph.getNodes():
             force = forces[n].norm()
-            layout[n] += (forces[n] / force) * min(temp, force)
+            if force != 0:
+                layout[n] += (forces[n] / force) * min(temp, force)
         temp *= temp_decay
-        frac_done = iterations / i
+        frac_done = iterations+1 / (i+1)
 
 
 # basic implementation of the Fruchterman-Reingold algorithm, not efficient
@@ -133,3 +134,7 @@ def run(graph, iterations):
 
 def main(graph):
     run(graph, ITERATIONS)
+    # pinning_weights = graph.getDoubleProperty("pinningWeight")
+    # for n in graph.getNodes():
+    #     pinning_weights[n] = 0
+    # fr_2(graph, ITERATIONS)
