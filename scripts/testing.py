@@ -6,7 +6,7 @@ import pstats
 import kd_tree_partitioning
 import fruchterman_reingold
 
-TESTING_GRAPHS_LOCATION = "../graphs/testing/"
+TESTING_GRAPHS_LOCATION = "../graphs/testing_dataset/"
 PROFILING_LOCATION = "../profiling/"
 GRAPHS_NAME = ["rgg_500_1000.tlp", "rgg_50_100.tlp"]
 
