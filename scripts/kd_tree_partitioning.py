@@ -5,7 +5,7 @@ from collections import deque
 import math
 import random
 
-MIN_PARTITION_SIZE = 5
+PARTITION_SIZE = 5
 
 # returns a list of list of nodes
 def run(graph, min_partition_size):
@@ -34,9 +34,16 @@ def run(graph, min_partition_size):
         count += 1
     return list(partitions)
 
+def create_subgraphs(graph, partitions):
+    count = 0
+    for p in partitions:
+        graph.inducedSubGraph(p, None, "partition_{}".format(count))
+        count += 1
+        
+
 def main(graph):
     nb_nodes = graph.numberOfNodes()
-    partitions = run(graph, min_partition_size) 
+    partitions = run(graph, PARTITION_SIZE)
     
     # DEBUG
     colors = graph.getColorProperty("viewColor")
