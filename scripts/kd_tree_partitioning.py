@@ -24,19 +24,20 @@ def run(graph, max_partition_size):
 
             # cut the partition in two and push the 2 new partitions in the queue
             median_index = p_size // 2
-            partitions.append(p[:median_index])
             partitions.append(p[median_index:])
+            partitions.append(p[:median_index])
             
             # terminate when we have reached the ideal partition size 
             if (p_size // 2 if p_size % 2 == 0 else (p_size // 2) + 1) <= max_partition_size: quit = True               
         count += 1
     return list(partitions)
 
-def create_subgraphs(graph, partitions):
-    count = 0
-    for p in partitions:
-        graph.inducedSubGraph(p, None, "partition_{}".format(count))
-        count += 1        
+
+# def create_subgraphs(graph, partitions):
+#     count = 0
+#     for p in partitions:
+#         graph.inducedSubGraph(p, None, "partition_{}".format(count))
+#         count += 1        
 
 def main(graph):
     nb_nodes = graph.numberOfNodes()

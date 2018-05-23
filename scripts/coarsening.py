@@ -20,8 +20,9 @@ def edge_collapse(graph, edge):
     weights = graph.getDoubleProperty("weight")
     layout = graph.getLayoutProperty("viewLayout")    
     node1 = graph.source(edge)
-    node2 = grahp.target(edge)
+    node2 = graph.target(edge)
     metanode = graph.createMetaNode([node1, node2])
+    # TODO: create the metanode and the corresponding subgraphs
     pinning_weights[metanode] = math.sqrt(pinning_weights[node1] * pinning_weights[node2]) 
     weights[metanode] = weights[node1] + weights[node2]
     layout[metanode] = weights[node1] * layout[node1] + weights[node2] * layout[node2]
@@ -44,10 +45,13 @@ def find_next_collapse(graph):
 
 def run(graph, iterations):
     init_weights(graph)
+    coarsest_graph = graph
     for i in range(iterations):
-        edge = find_next_collapse(graph)
+        edge = find_next_collapse(coarsest_graph)
         if edge:
-            edge_collapse(graph, edge)
+            edge_collapse(coarsest_graph, edge)
+            coarsest_graph = graph.getSubGraph("groups") # "groups" contains only the metanodes and the nodes NOT inside a metanode
+        
 
 def main(graph):
-    pass
+    run(graph, MAX_ITERATIONS)

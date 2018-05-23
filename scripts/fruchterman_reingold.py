@@ -2,7 +2,7 @@ from tulip import tlp
 import math
 import kd_tree_partitioning
 
-ITERATIONS = 100
+ITERATIONS = 1000
 
 def repulsive_force(dist, k):
     return (k * k) / dist
@@ -33,24 +33,29 @@ def fr_2(graph, iterations):
     forces = graph.getLayoutProperty("forces")
     pinning_weights = graph.getDoubleProperty("pinningWeight")
 
-    min_partition_size = 20
+    min_partition_size = 1000
     frac_done = 0
-    K = 0.1 # optimal geometric node distance
+    delta_frac = 1 / (iterations)
+    K = 10 # optimal geometric node distance
     temp = K * math.sqrt(graph.numberOfNodes())
     temp_decay = 0.9 
     
-    partitions = compute_partitions_CG(kd_tree_partitioning.run(graph, min_partition_size), layout)
+    
+    if graph.numberOfNodes() > 1000:
+        partitions = compute_partitions_CG(kd_tree_partitioning.run(graph, min_partition_size), layout)
+    else:
+        partitions = [(graph.getNodes(), tlp.Vec3f())]
 
     for i in range(iterations):
         for (p, cg) in partitions:
             for n in p:
                 if frac_done > pinning_weights[n]:
-                    # computing repulsive forces for neighbor inside the partition
-                    for n2 in p:
-                        if n != n2:
-                            delta_pos = layout[n] - layout[n2]
-                            dist = delta_pos.norm()
-                            forces[n] += (K * K) * (delta_pos / (dist * dist))
+                    #computing repulsive forces for neighbor inside the partition
+                  #for n2 in p:
+                   # if n != n2:
+                    #    delta_pos = layout[n] - layout[n2]
+                     #   dist = delta_pos.norm()
+                      #  forces[n] += (K * K) * (delta_pos / (dist * dist))
                 
                     # computing repulsive forces between the node and the other partitions
                     for (p2, cg2) in partitions:
@@ -68,73 +73,62 @@ def fr_2(graph, iterations):
             if frac_done > pinning_weights[source]:
                 forces[source] -= force
             if frac_done > pinning_weights[target]:            
-                forces[target] += force 
+                forces[target] += force
 
         # updating positions
         for n in graph.getNodes():
             force = forces[n].norm()
             if force != 0:
-                layout[n] += (forces[n] / force) * min(temp, force)
+                layout[n] += (forces[n] / force) * min(temp, force)  
         temp *= temp_decay
-        frac_done = iterations+1 / (i+1)
-
-
-# basic implementation of the Fruchterman-Reingold algorithm, not efficient
+        frac_done += delta_frac
+        #print("frac done {}".format(frac_done))
+        #print("temp {}".format(temp))      
+        
 def run(graph, iterations):
-    boundingbox = tlp.computeBoundingBox(graph) 
-    width = boundingbox.width()
-    height = boundingbox.height()
-    area = width * height
-    min_coord = boundingbox[0]
-    max_coord = boundingbox[1]
-    
-    layout = graph.getLayoutProperty("viewLayout")
-    forces = graph.getLayoutProperty("forces")          # node:tlp.Vec3f dict representing the total forces applied on each node 
-    
-    nb_nodes = graph.numberOfNodes()
-    k = math.sqrt(area / nb_nodes)                      # ideal length between nodes given the above force model 
-    temp = min(width, height) / 10
-    dt = temp / (iterations + 1)
+    # constants
+    L = 10
+    K_r = 6250
+    K_s = 1
+    delta_t = 0.04
+    R = 0.05
+    MAX_DISPLACEMENT_SQUARED = 100
 
-    # init forces
-    for n in graph.nodes():
-        forces[n] = tlp.Vec3f()
+    N = graph.getNodes()
+    layout = graph.getLayoutProperty("viewLayout")
+    disp = graph.getLayoutProperty("disp")    
 
     for i in range(iterations):
-        # computing repulsive forces for every pair of nodes
-        for n in graph.getNodes():
-            for n2 in graph.getNodes():
-                if n != n2:
-                    delta_pos = layout[n] - layout[n2]
-                    dist = delta_pos.norm()
-                    if dist != 0: # TODO: push the nodes if dist == 0
-                        forces[n] += delta_pos * (repulsive_force(dist, k) / dist)
-
-        # computing attractive forces for every edge
+        # repulsive forces
+        for u in graph.getNodes():
+            for v in graph.getNodes():
+                if u == v: continue
+                dist = layout[u] - layout[v]
+                dist_norm = dist.norm()
+                dist_sq = dist_norm * dist_norm
+                force = dist * (K_r / dist_sq)            
+                force = force / dist_norm
+                disp[u] += force
+        
+        # attractive forces
         for e in graph.getEdges():
-            source = graph.source(e)
-            target = graph.target(e)
-            delta_pos = layout[source] - layout[target]
-            dist = delta_pos.norm()
-            if dist != 0: # randomly generated graphs may have edges that connect the same node...
-                force = attractive_force(dist, k) / dist 
-                forces[source] -= delta_pos * force
-                forces[target] += delta_pos * force
+            u = graph.source(e)
+            v = graph.target(e)
+            dist = layout[u] - layout[v]
+            dist_norm = dist.norm()
+            force = dist * (K_s * (dist_norm - L))
+            force = force / dist_norm
+            disp[u] -= force
+            disp[v] += force
 
-        # updating nodes position and keeping them in-bound
+        # update positions
         for n in graph.getNodes():
-            force = forces[n].norm()
-            if force != 0:
-                displacement = min(force, temp) / force
-                layout[n] += forces[n] * displacement
-                layout[n].setX(min(min_coord.x(), max(max_coord.x(), layout[n].x())))
-                layout[n].setY(min(min_coord.y(), max(max_coord.y(), layout[n].y())))                
-            forces[n].fill(0)
-        temp = cool(temp, dt)
+            disp_norm = disp[n].norm()
+            disp_sq = disp_norm * disp_norm
+            if disp_sq > MAX_DISPLACEMENT_SQUARED:
+                s = math.sqrt(MAX_DISPLACEMENT_SQUARED / disp_sq)
+                disp[n] *= s
+            layout[n] += (disp[n] * delta_t)
 
 def main(graph):
     run(graph, ITERATIONS)
-    # pinning_weights = graph.getDoubleProperty("pinningWeight")
-    # for n in graph.getNodes():
-    #     pinning_weights[n] = 0
-    # fr_2(graph, ITERATIONS)
