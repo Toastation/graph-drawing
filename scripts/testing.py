@@ -1,6 +1,7 @@
 # TODO: create a set of randomly generated graphs via the tulip API
 
 from tulip import tlp
+import os
 import profile
 import pstats
 import kd_tree_partitioning
@@ -8,16 +9,25 @@ import fruchterman_reingold
 
 TESTING_GRAPHS_LOCATION = "../graphs/testing_dataset/"
 PROFILING_LOCATION = "../profiling/"
-GRAPHS_NAME = ["rgg_500_1000.tlp", "rgg_50_100.tlp"]
+COMPATIBLE_EXT = ["tlp", "tlp.gz", "tlpz", "tlpb", "tlpb.gz", "tlpbz", "json", "gexf", "net", "paj", "gml", "dot", "txt"]
 
 profile_name = []
 
 def load_graphs(graphs):
-    for i in GRAPHS_NAME:
-        graph = tlp.loadGraph(TESTING_GRAPHS_LOCATION+i)
+    files = os.listdir(TESTING_GRAPHS_LOCATION)
+    for f in files:
+        compatible = False
+        for ext in COMPATIBLE_EXT:
+            if f.endswith(ext): 
+                compatible = True
+                break
+        if not compatible: 
+            print("File \"{}\" not loaded: incompatible extension.")
+            continue
+        graph = tlp.loadGraph(TESTING_GRAPHS_LOCATION+f)
         if not graph:
-            print("FAILED TO LOAD GRAPH \"{}\"".format(i))
-        else: graphs.append(graph)
+            print("Failed to load graph \"{}\"".format(f))
+        else: graphs.append(graph)  
 
 def profile_kd_tree_partitioning(graphs):
     global profile_name
