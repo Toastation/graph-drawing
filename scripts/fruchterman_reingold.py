@@ -4,19 +4,6 @@ import kd_tree_partitioning
 
 ITERATIONS = 1000
 
-def repulsive_force(dist, k):
-    return (k * k) / dist
-  
-def attractive_force(dist, k):
-    return (dist * dist) / k
-
-def cool(temp, dt):
-    temp -= dt      # TODO: experiment with non-linear cooling
-    return temp if temp >= 0 else 0
-
-def normalize_vec3f(vec):
-    return vec / vec.norm()
-
 # computes a list of tuples (partition, partition_cg, partition_size) where partition is a list of nodes and partition_cg their center of gravity (double)
 def compute_partitions_CG(partitions, layout):
     partitions_cg = []
@@ -84,7 +71,18 @@ def fr_2(graph, iterations):
         frac_done += delta_frac
         #print("frac done {}".format(frac_done))
         #print("temp {}".format(temp))      
-        
+
+def repulsive_force(dist_vec, K):
+    dist_norm = dist_vec.norm()
+    dist_norm_sq = dist_norm * dist_norm
+    force = dist_vec * (K / dist_norm_sq)
+    return force / dist_norm
+
+def attractive_force(dist_vec, K, L):
+    dist_norm = dist_vec.norm()
+    force = dist_vec * K * (dist_norm - L)
+    return force / dist_norm
+
 def run(graph, iterations):
     # constants
     L = 10
@@ -92,22 +90,23 @@ def run(graph, iterations):
     K_s = 1
     delta_t = 0.04
     R = 0.05
-    MAX_DISPLACEMENT_SQUARED = 100
+    max_disp_sq = 100
+    conv_threshold = 1
 
     N = graph.getNodes()
     layout = graph.getLayoutProperty("viewLayout")
     disp = graph.getLayoutProperty("disp")    
 
-    for i in range(iterations):
+    quit = False
+    it = 1
+    while not quit:
+        total_disp = 0
         # repulsive forces
         for u in graph.getNodes():
             for v in graph.getNodes():
                 if u == v: continue
                 dist = layout[u] - layout[v]
-                dist_norm = dist.norm()
-                dist_sq = dist_norm * dist_norm
-                force = dist * (K_r / dist_sq)            
-                force = force / dist_norm
+                force = repulsive_force(dist, K_r)
                 disp[u] += force
         
         # attractive forces
@@ -115,20 +114,24 @@ def run(graph, iterations):
             u = graph.source(e)
             v = graph.target(e)
             dist = layout[u] - layout[v]
-            dist_norm = dist.norm()
-            force = dist * (K_s * (dist_norm - L))
-            force = force / dist_norm
+            force = attractive_force(dist, K_s, L)
             disp[u] -= force
             disp[v] += force
 
         # update positions
         for n in graph.getNodes():
             disp_norm = disp[n].norm()
+            total_disp += disp_norm
             disp_sq = disp_norm * disp_norm
-            if disp_sq > MAX_DISPLACEMENT_SQUARED:
-                s = math.sqrt(MAX_DISPLACEMENT_SQUARED / disp_sq)
+            if disp_sq > max_disp_sq:
+                s = math.sqrt(max_disp_sq / disp_sq)
                 disp[n] *= s
             layout[n] += (disp[n] * delta_t)
+            if total_disp < conv_threshold: quit = True
+        quit = it > iterations or quit # maybe infinite if conv_threshold is too low...
+        it += 1
+    print("number if iterations done: {}".format(it))
 
 def main(graph):
     run(graph, ITERATIONS)
+    updateVisualization()   
