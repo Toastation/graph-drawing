@@ -1,6 +1,7 @@
 # TODO: create a set of randomly generated graphs via the tulip API
 
 from tulip import tlp
+from pexpect import pxssh
 import os
 import profile
 import pstats
@@ -45,14 +46,14 @@ def profile_fr(graphs):
     for i in graphs:
         save_name = save_path+"n{}_e{}".format(i.numberOfNodes(), i.numberOfEdges())
         profile_name.append(save_name)
-        profile.runctx("fruchterman_reingold.main(graph, iterations)", globals(), {"graph":i, "iterations":iterations}, save_name)
+        profile.runctx("fruchterman_reingold.run(graph, iterations)", globals(), {"graph":i, "iterations":iterations}, save_name)
 
 def main():
     graphs = []
     load_graphs(graphs)
     
     profile_kd_tree_partitioning(graphs)
-    #profile_fr(graphs) too slow for this set of graphs TODO:create a better one
+    profile_fr(graphs) # too slow for this set of graphs TODO:create a better one
 
     # prints all profilings
     for i in profile_name: 

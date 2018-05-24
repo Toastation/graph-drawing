@@ -1,7 +1,10 @@
 from tulip import tlp
 import pinning_weights
-import kd_tree_partitioning
+import coarsening
 import fruchterman_reingold
 
 def main(graph):
-    pass
+    pinning_weights.run(graph)
+    coarsening.run(graph)
+
+    

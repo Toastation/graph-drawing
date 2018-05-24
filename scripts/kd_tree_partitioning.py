@@ -32,17 +32,15 @@ def run(graph, max_partition_size):
         count += 1
     return list(partitions)
 
-
-# def create_subgraphs(graph, partitions):
-#     count = 0
-#     for p in partitions:
-#         graph.inducedSubGraph(p, None, "partition_{}".format(count))
-#         count += 1        
+def create_subgraphs(graph, partitions):
+    count = 0
+    for p in partitions:
+        graph.inducedSubGraph(p, None, "partition_{}".format(count))
+        count += 1        
 
 def main(graph):
-    nb_nodes = graph.numberOfNodes()
     partitions = run(graph, PARTITION_SIZE)
-    
+
     # DEBUG
     colors = graph.getColorProperty("viewColor")
     print(partitions)

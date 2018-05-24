@@ -4,7 +4,7 @@ import kd_tree_partitioning
 
 ITERATIONS = 1000
 
-# computes a list of tuples (partition, partition_cg, partition_size) where partition is a list of nodes and partition_cg their center of gravity (double)
+## computes a list of tuples (partition, partition_cg) where partition is a list of nodes and partition_cg their center of gravity (tlp.Vec3f)
 def compute_partitions_CG(partitions, layout):
     partitions_cg = []
     for p in partitions:
@@ -17,12 +17,14 @@ def compute_partitions_CG(partitions, layout):
 
 def repulsive_force(dist_vec, K):
     dist_norm = dist_vec.norm()
+    if dist_norm == 0: return tlp.Vec3f()
     dist_norm_sq = dist_norm * dist_norm
     force = dist_vec * (K / dist_norm_sq)
     return force / dist_norm
 
 def attractive_force(dist_vec, K, L):
     dist_norm = dist_vec.norm()
+    if dist_norm == 0: return tlp.Vec3f()
     force = dist_vec * K * (dist_norm - L)
     return force / dist_norm
 
@@ -52,8 +54,10 @@ def run(graph, iterations):
 
     while not quit:
         total_disp = 0
-        if N > 20 and (it < 20 or (it > 20 and it % 3 == 0)): # TODO: find a better rate of partitioning
+        
+        if N > 20 and (it < 20 or (it > 20 and it % 5 == 0)): # TODO: find a better rate of partitioning
             partitions = compute_partitions_CG(kd_tree_partitioning.run(graph, min_partition_size), layout)
+        
         for (p, p_cg) in partitions:
             for u in p:
                 for (p2, p2_cg) in partitions:
@@ -73,7 +77,7 @@ def run(graph, iterations):
         #         dist = layout[u] - layout[v]
         #         force = repulsive_force(dist, K_r)
         #         disp[u] += force
-        
+
         # attractive forces
         for e in graph.getEdges():
             u = graph.source(e)
