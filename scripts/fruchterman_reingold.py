@@ -37,12 +37,12 @@ def fr_2(graph, iterations):
         for (p, cg) in partitions:
             for n in p:
                 if frac_done > pinning_weights[n]:
-                    #computing repulsive forces for neighbor inside the partition
-                  #for n2 in p:
-                   # if n != n2:
-                    #    delta_pos = layout[n] - layout[n2]
-                     #   dist = delta_pos.norm()
-                      #  forces[n] += (K * K) * (delta_pos / (dist * dist))
+                    # computing repulsive forces for neighbor inside the partition
+                    #for n2 in p:
+                    #   if n != n2:
+                    #       delta_pos = layout[n] - layout[n2]
+                    #       dist = delta_pos.norm()
+                    #       forces[n] += (K * K) * (delta_pos / (dist * dist))
                 
                     # computing repulsive forces between the node and the other partitions
                     for (p2, cg2) in partitions:
@@ -88,17 +88,20 @@ def run(graph, iterations):
     L = 10
     K_r = 6250
     K_s = 1
-    delta_t = 0.04
     R = 0.05
     max_disp_sq = 100
     conv_threshold = 1
 
     N = graph.getNodes()
     layout = graph.getLayoutProperty("viewLayout")
-    disp = graph.getLayoutProperty("disp")    
+    disp = graph.getLayoutProperty("disp")
+    bounding_box = tlp.computeBoundingBox(graph)
+    t = 100 # cst = 0.04
+    t_f = 0.9
 
     quit = False
     it = 1
+
     while not quit:
         total_disp = 0
         # repulsive forces
@@ -122,14 +125,17 @@ def run(graph, iterations):
         for n in graph.getNodes():
             disp_norm = disp[n].norm()
             total_disp += disp_norm
-            disp_sq = disp_norm * disp_norm
-            if disp_sq > max_disp_sq:
-                s = math.sqrt(max_disp_sq / disp_sq)
-                disp[n] *= s
-            layout[n] += (disp[n] * delta_t)
+            disp[n] = (disp[n] / disp_norm) * min(disp_norm, t)
+            # disp_sq = disp_norm * disp_norm
+            # if disp_sq > max_disp_sq:
+            #     s = math.sqrt(max_disp_sq / disp_sq)
+            #     disp[n] *= s
+            layout[n] += disp[n]
             if total_disp < conv_threshold: quit = True
         quit = it > iterations or quit # maybe infinite if conv_threshold is too low...
         it += 1
+        t *= t_f
+        print(t)
     print("number if iterations done: {}".format(it))
 
 def main(graph):
