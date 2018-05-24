@@ -37,21 +37,42 @@ def run(graph, iterations):
     t_f = 0.9
     max_disp_sq = 100
     conv_threshold = 6.0 / N
+    min_partition_size = 10
 
     layout = graph.getLayoutProperty("viewLayout")
     disp = graph.getLayoutProperty("disp")
     quit = False
     it = 1
 
+    if N > 20:
+        partitions = kd_tree_partitioning.run(graph, min_partition_size)
+    else: 
+        partitions = [graph.nodes()]
+    partitions = compute_partitions_CG(partitions, layout)
+
     while not quit:
         total_disp = 0
-        # repulsive forces
-        for u in graph.getNodes():
-            for v in graph.getNodes():
-                if u == v: continue
-                dist = layout[u] - layout[v]
-                force = repulsive_force(dist, K_r)
-                disp[u] += force
+        if N > 20 and (it < 20 or (it > 20 and it % 3 == 0)): # TODO: find a better rate of partitioning
+            partitions = compute_partitions_CG(kd_tree_partitioning.run(graph, min_partition_size), layout)
+        for (p, p_cg) in partitions:
+            for u in p:
+                for (p2, p2_cg) in partitions:
+                    if p2 == p: continue
+                    dist = layout[u] - p2_cg
+                    force = repulsive_force(dist, K_r)
+                    disp[u] += force
+                for v in p:
+                    if u == v: continue
+                    dist = layout[u] - layout[v]
+                    force = repulsive_force(dist, K_r)
+                    disp[u] += force
+        
+        # for u in graph.getNodes():
+        #     for v in graph.getNodes():
+        #         if u == v: continue
+        #         dist = layout[u] - layout[v]
+        #         force = repulsive_force(dist, K_r)
+        #         disp[u] += force
         
         # attractive forces
         for e in graph.getEdges():
@@ -73,6 +94,7 @@ def run(graph, iterations):
         quit = it > iterations or quit # maybe infinite if conv_threshold is too low...
         it += 1
         t *= t_f
+        print("it: {}\ntemp: {}\ntotal disp: {}\n------------------".format(it, t, total_disp))
     print("number if iterations done: {}".format(it))
 
 def main(graph):
