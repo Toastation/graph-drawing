@@ -4,16 +4,13 @@ import kd_tree_partitioning
 
 ITERATIONS = 1000
 
-## computes a list of tuples (partition, partition_cg) where partition is a list of nodes and partition_cg their center of gravity (tlp.Vec3f)
+## computes the center of gravity for each partition (added as graph attribute "centerOfGravity")
 def compute_partitions_CG(partitions, layout):
-    partitions_cg = []
     for p in partitions:
         cg = tlp.Vec3f()
-        partition_size = len(p)
-        for n in p:
+        for n in p.getNodes():
             cg += layout[n]
-        partitions_cg.append((p, cg/partition_size))
-    return partitions_cg
+        p.setAttribute("centerOfGravity", cg / p.numberOfNodes())
 
 def repulsive_force(dist_vec, K):
     dist_norm = dist_vec.norm()
@@ -60,23 +57,19 @@ def run(graph, iterations):
         
         for (p, p_cg) in partitions:
             for u in p:
+                # repulsive forces between nodes and partitions
                 for (p2, p2_cg) in partitions:
                     if p2 == p: continue
                     dist = layout[u] - p2_cg
                     force = repulsive_force(dist, K_r)
-                    disp[u] += force
+                    disp[u] += force    # TODO: add the size of p2 as a factor (?)
+                
+                # repulsive forces between nodes of the same partition
                 for v in p:
                     if u == v: continue
                     dist = layout[u] - layout[v]
                     force = repulsive_force(dist, K_r)
                     disp[u] += force
-        
-        # for u in graph.getNodes():
-        #     for v in graph.getNodes():
-        #         if u == v: continue
-        #         dist = layout[u] - layout[v]
-        #         force = repulsive_force(dist, K_r)
-        #         disp[u] += force
 
         # attractive forces
         for e in graph.getEdges():
