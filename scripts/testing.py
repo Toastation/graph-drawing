@@ -1,7 +1,6 @@
 # TODO: create a set of randomly generated graphs via the tulip API
 
 from tulip import tlp
-from pexpect import pxssh
 import os
 import profile
 import pstats
@@ -33,11 +32,20 @@ def load_graphs(graphs):
 def profile_kd_tree_partitioning(graphs):
     global profile_name
     save_path = PROFILING_LOCATION+"profiling_kd_tree_part_"
-    min_partition_size = 5
+    max_partition_size = 10
     for i in graphs:
-        save_name = save_path+"n{}_e{}_p{}".format(i.numberOfNodes(), i.numberOfEdges(), min_partition_size)
+        save_name = save_path+"n{}_e{}_p{}".format(i.numberOfNodes(), i.numberOfEdges(), max_partition_size)
         profile_name.append(save_name)
-        profile.runctx("kd_tree_partitioning.run(graph, min_partition_size)", globals(), {"graph":i, "min_partition_size":min_partition_size}, save_name)
+        profile.runctx("kd_tree_partitioning.run(graph, max_partition_size)", globals(), {"graph":i, "max_partition_size":max_partition_size}, save_name)
+
+def profile_kd_tree_partitioning_list(graphs):
+    global profile_name
+    save_path = PROFILING_LOCATION+"profiling_kd_tree_part_list_"
+    max_partition_size = 10
+    for i in graphs:
+        save_name = save_path+"n{}_e{}_p{}".format(i.numberOfNodes(), i.numberOfEdges(), max_partition_size)
+        profile_name.append(save_name)
+        profile.runctx("kd_tree_partitioning.run_list(graph, max_partition_size)", globals(), {"graph":i, "max_partition_size":max_partition_size}, save_name)
 
 def profile_fr(graphs):
     global profile_name
@@ -53,7 +61,8 @@ def main():
     load_graphs(graphs)
     
     profile_kd_tree_partitioning(graphs)
-    profile_fr(graphs) # too slow for this set of graphs TODO:create a better one
+    profile_kd_tree_partitioning_list(graphs)
+    #profile_fr(graphs) # too slow for this set of graphs TODO:create a better one
 
     # prints all profilings
     for i in profile_name: 

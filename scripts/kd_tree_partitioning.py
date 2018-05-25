@@ -1,3 +1,5 @@
+## Names of partition sub-graphs follow the format "partition_{#number}"
+
 from tulip import tlp
 from collections import deque
 import math
@@ -5,10 +7,8 @@ import random
 
 PARTITION_SIZE = 100
 
-# returns a list of list of nodes
-def run(graph, max_partition_size):
+def run_list(graph, max_partition_size):
     layout = graph.getLayoutProperty("viewLayout")
-    colors = graph.getColorProperty("viewColor")
     partitions = deque([graph.nodes()])
     quit = False
     count = 0
@@ -30,26 +30,61 @@ def run(graph, max_partition_size):
             # terminate when we have reached the ideal partition size 
             if (p_size // 2 if p_size % 2 == 0 else (p_size // 2) + 1) <= max_partition_size: quit = True               
         count += 1
-    return list(partitions)
+    create_subgraphs(graph, partitions)
+
+def run(graph, max_partition_size):
+    layout = graph.getLayoutProperty("viewLayout")
+    graph.addCloneSubGraph("partition_0")
+    
+    quit = False
+    count = 0
+    p_count = 1
+
+    while not quit:
+        for p in graph.getSubGraphs():
+            if p.getName().startswith("partition"):
+                p_size = p.numberOfNodes()
+                p_nodes = p.nodes() # we use a list of nodes because there's no way to efficiently create a sub-graph via an IteratorNode
+                
+                # sort the partition by x and y coord alternatively
+                p_nodes.sort(key = lambda pos: layout[pos].x()) if count % 2 == 0 else p_nodes.sort(key = lambda pos: layout[pos].y()) 
+
+                # cut the partition in two, create their induced sub-graph and delete the current partition 
+                median_index = p_size // 2
+                graph.inducedSubGraph(p_nodes[median_index:], None, "partition_{}".format(p_count))
+                graph.inducedSubGraph(p_nodes[:median_index], None, "partition_{}".format(p_count + 1))            
+                graph.delSubGraph(p)
+                
+                # terminate when we have reached the ideal partition size 
+                if (p_size // 2 if p_size % 2 == 0 else (p_size // 2) + 1) <= max_partition_size: quit = True
+                p_count += 2         
+        count += 1
+
+## delete all partitions of graph
+def delete_partitions(graph):
+    for sub in graph.getSubGraphs():
+        if sub.getName().startswith("partition"):
+            graph.delSubGraph(sub)
 
 def create_subgraphs(graph, partitions):
     count = 0
     for p in partitions:
         graph.inducedSubGraph(p, None, "partition_{}".format(count))
-        count += 1        
+        count += 1
 
 def main(graph):
-    partitions = run(graph, PARTITION_SIZE)
+    run_list(graph, PARTITION_SIZE)
 
     # DEBUG
     colors = graph.getColorProperty("viewColor")
-    print(partitions)
     max_size = 0
+    partitions = [p for p in graph.getSubGraphs() if p.getName().startswith("partition")]
     for p in partitions:
-        if len(p) > max_size: max_size = len(p)
+        p_size = p.numberOfNodes()
+        if p_size > max_size: max_size = p_size
         r = random.randrange(255)
         g = random.randrange(255)
         b = random.randrange(255)
-        for n in p:
+        for n in p.getNodes():
             colors[n] = tlp.Color(r, g, b)
     print("max_size : {}".format(max_size))
