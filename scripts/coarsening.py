@@ -51,7 +51,6 @@ def run(graph, iterations):
         if edge:
             edge_collapse(coarsest_graph, edge)
             coarsest_graph = graph.getSubGraph("groups") # "groups" contains only the metanodes and the nodes NOT inside a metanode
-        
 
 def main(graph):
     run(graph, MAX_ITERATIONS)

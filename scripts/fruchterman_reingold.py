@@ -4,13 +4,14 @@ import kd_tree_partitioning
 
 ITERATIONS = 1000
 
-## computes the center of gravity for each partition (added as graph attribute "centerOfGravity")
 def compute_partitions_CG(partitions, layout):
+    result = []
     for p in partitions:
-        cg = tlp.Vec3f()
-        for n in p.getNodes():
+        cg =  tlp.Vec3f()
+        for n in p:
             cg += layout[n]
-        p.setAttribute("centerOfGravity", cg / p.numberOfNodes())
+        result.append((p, cg / len(p)))
+    return result
 
 def repulsive_force(dist_vec, K):
     dist_norm = dist_vec.norm()
@@ -32,36 +33,31 @@ def run(graph, iterations):
     K_s = 1
     R = 0.05
     N = graph.numberOfNodes()    
-    t = 100 # cst = 0.04
+    t = 200 # cst = 0.04
     t_f = 0.9
-    max_disp_sq = 100
     conv_threshold = 6.0 / N
-    min_partition_size = 10
+    max_partition_size = 20
 
     layout = graph.getLayoutProperty("viewLayout")
     disp = graph.getLayoutProperty("disp")
     quit = False
     it = 1
 
-    if N > 20:
-        partitions = kd_tree_partitioning.run(graph, min_partition_size)
-    else: 
-        partitions = [graph.nodes()]
-    partitions = compute_partitions_CG(partitions, layout)
+    partitions = compute_partitions_CG(kd_tree_partitioning.run(graph, max_partition_size), layout)
 
     while not quit:
         total_disp = 0
         
-        if N > 20 and (it < 20 or (it > 20 and it % 5 == 0)): # TODO: find a better rate of partitioning
-            partitions = compute_partitions_CG(kd_tree_partitioning.run(graph, min_partition_size), layout)
+        if N > max_partition_size and (it < 20 or (it > 20 and it % 5 == 0)): # TODO: find a better rate of partitioning
+           partitions = compute_partitions_CG(kd_tree_partitioning.run(graph, max_partition_size), layout)
         
-        for (p, p_cg) in partitions:
+        for (p, cg) in partitions:
             for u in p:
                 # repulsive forces between nodes and partitions
-                for (p2, p2_cg) in partitions:
+                for (p2, cg2) in partitions:
                     if p2 == p: continue
-                    dist = layout[u] - p2_cg
-                    force = repulsive_force(dist, K_r)
+                    dist = layout[u] - cg2
+                    force = len(p2) * repulsive_force(dist, K_r)
                     disp[u] += force    # TODO: add the size of p2 as a factor (?)
                 
                 # repulsive forces between nodes of the same partition
@@ -91,9 +87,10 @@ def run(graph, iterations):
         quit = it > iterations or quit # maybe infinite if conv_threshold is too low...
         it += 1
         t *= t_f
-        print("it: {}\ntemp: {}\ntotal disp: {}\n------------------".format(it, t, total_disp))
+        #print("it: {}\ntemp: {}\ntotal disp: {}\n------------------".format(it, t, total_disp))
+
     print("number if iterations done: {}".format(it))
 
 def main(graph):
     run(graph, ITERATIONS)
-    updateVisualization()   
+    updateVisualization()
