@@ -1,13 +1,47 @@
 from tulip import tlp
+import math
 
 NEIGHBOR_INFLUENCE = 0.6    # [0, 1], a higher value will reduce the influence of the neighbors of a node on its displacement
 PINNING_WEIGHT_INIT = 0.35  # determines the decay of the pinning weight
 K = 0.5                     # determines how much a change should spread
 
+## Computes the positioning score of each node, and place new nodes according to their number of positioned neighbors.
+# These scores indicate the "confidence" in the node's position (comprised between [0, 1]).
+# A score of 1 is assigned to nodes already in the graph, 0.25 to new nodes with 2 or more positioned neighbors,
+# 0.1 to to new nodes with 1 positioned neighbor and 0 to new nodes with no neighbors.
+# New nodes with 2 more positioned neighbors are place at their weighted barycenter, new nodes with 1 positioned
+# neighbor are place between their neighbor and the center of the graph, and new nodes with no positioned neighbors
+# are placed in a circle around the center of the graph.
 def compute_positioning_score(graph):
-    # TODO: find a way to determine which node is new and which node had one of its neighbor removed.
-    # or find a way to get the previous layout of the graph.
-    pass
+    isNewNode = graph.getBooleanProperty("isNewNode")
+    positioning_scores = graph.getDoubleProperty("positioningScore")    
+    layout = graph.getLayoutProperty("viewLayout")
+    center_coord = tlp.computeBoundingBox(graph).center()
+    dalpha = 360 / graph.numberOfNodes()
+    alpha = 0
+    radius = 1
+    # TODO: add new nodes to the set of positioned nodes once positioned (?)
+    for n in graph.bfs():
+        if isNewNode[n]:
+            deg = graph.deg(n)
+            if deg >= 2:
+                positioning_scores[n] = 0.25
+                layout[n] = tlp.Vec3f()
+                for neighbor in graph.getInOutNodes(n):
+                    layout[n] += layout[neighbor]
+                layout[n] /= deg
+            if deg == 1:
+                positioning_scores[n] = 0.1
+                pos = tlp.Vec3f()
+                for neighbor in graph.getInOutNodes():
+                    pos += layout[neighbor]
+                layout[n] = center_coord + pos / 2
+            else:
+                positioning_scores[n] = 0
+                layout[n] = tlp.Vec3f(center_coord.x() + radius * math.cos(alpha), center_coord.x() + radius * math.sin(alpha))
+                alpha += dalpha
+        else:
+          positioning_scores[n] = 1  
 
 def compute_distance_to_node(graph):
     # TODO: if a BFS way, create a series of sets where D0 = [pinning_weights[n] < 1] U [nodes adjacent to a change]
