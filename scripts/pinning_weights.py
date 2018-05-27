@@ -13,35 +13,39 @@ K = 0.5                     # determines how much a change should spread
 # neighbor are place between their neighbor and the center of the graph, and new nodes with no positioned neighbors
 # are placed in a circle around the center of the graph.
 def compute_positioning_score(graph):
-    isNewNode = graph.getBooleanProperty("isNewNode")
+    is_new_node = graph.getBooleanProperty("isNewNode")
+    positioned = graph.getBooleanProperty("positioned")    
     positioning_scores = graph.getDoubleProperty("positioningScore")    
     layout = graph.getLayoutProperty("viewLayout")
     center_coord = tlp.computeBoundingBox(graph).center()
     dalpha = 360 / graph.numberOfNodes()
     alpha = 0
     radius = 1
-    # TODO: add new nodes to the set of positioned nodes once positioned (?)
-    for n in graph.bfs():
-        if isNewNode[n]:
-            deg = graph.deg(n)
-            if deg >= 2:
-                positioning_scores[n] = 0.25
-                layout[n] = tlp.Vec3f()
-                for neighbor in graph.getInOutNodes(n):
-                    layout[n] += layout[neighbor]
-                layout[n] /= deg
-            if deg == 1:
-                positioning_scores[n] = 0.1
-                pos = tlp.Vec3f()
-                for neighbor in graph.getInOutNodes():
-                    pos += layout[neighbor]
-                layout[n] = center_coord + pos / 2
-            else:
-                positioning_scores[n] = 0
-                layout[n] = tlp.Vec3f(center_coord.x() + radius * math.cos(alpha), center_coord.x() + radius * math.sin(alpha))
-                alpha += dalpha
+
+    for n in is_new_node.getNodesEqualTo(False):
+        positioning_scores[n] = 1  
+
+    new_nodes_graph = graph.addSubGraph(is_new_node, "newNodes")        
+
+    for n in new_nodes_graph.bfs():
+        positioned_neighbors = [neighbor for neighbor in graph.getInOutNodes(n) if positioned[neighbor]]
+        nb_positioned = len(unpositioned_neighbors)       
+        if nb_positioned >= 2:
+            positioning_scores[n] = 0.25
+            layout[n] = tlp.Vec3f()
+            for neighbor in positioned_neighbors: layout[n] += layout[neighbor]
+            layout[n] /=  nb_positioned
+            positioned[n] = True
+        elif nb_positioned == 1:
+            positioning_scores[n] = 0.1
+            layout[n] = (layout[positioned_neighbors[0]] + center_coord) / 2             
         else:
-          positioning_scores[n] = 1  
+            positioning_scores[n] = 0            
+            layout[n] = tlp.Vec3f(center_coord.x() + radius * math.cos(alpha), center_coord.x() + radius * math.sin(alpha))
+            alpha += dalpha
+    
+    graph.delSubGraph(new_nodes_graph)        
+    
 
 def compute_distance_to_node(graph):
     # TODO: if a BFS way, create a series of sets where D0 = [pinning_weights[n] < 1] U [nodes adjacent to a change]
