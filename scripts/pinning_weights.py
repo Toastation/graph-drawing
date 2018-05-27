@@ -69,7 +69,7 @@ def compute_distance_to_node(graph):
                     next_set.append(neighbor)
         if len(next_set) == 0: break 
         distance_to_node.append(next_set)
-        current_set_index++
+        current_set_index += 1
     return distance_to_node
 
 ## \brief Computes and assign a pinning weight to every node of the graph.
