@@ -56,11 +56,12 @@ def compute_positioning_score(graph):
 # \return A list of list of tlp.node
 def compute_distance_to_node(graph):
     in_set = graph.getLocalBooleanProperty("inSet") # has a node been added to a set
-    is_new_node = graph.getBooleanProperty("isNewNode")    
-    is_adjacent_to_deleted = graph.getBooleanProperty("isAdjacentToDeleted")
+    is_adjacent_to_changed = graph.getBooleanProperty("isAdjacentToChanged")
     pinning_weights = graph.getDoubleProperty("pinningWeight")    
-    distance_to_node = [[n for n in graph.getNodes() if is_new_node[n] or is_adjacent_to_deleted[n]]] # D0    
+    distance_to_node = [[n for n in graph.getNodes() if pinning_weights[n] < 1 or is_adjacent_to_changed[n]]] # D0
     current_set_index = 0
+    for n in distance_to_node[0]:
+        in_set[n] = True
     while True:
         next_set = []
         for n in distance_to_node[current_set_index]:
@@ -70,6 +71,7 @@ def compute_distance_to_node(graph):
         if len(next_set) == 0: break 
         distance_to_node.append(next_set)
         current_set_index += 1
+    graph.delLocalProperty("inSet")
     return distance_to_node
 
 ## \brief Computes and assign a pinning weight to every node of the graph.
@@ -80,32 +82,31 @@ def compute_distance_to_node(graph):
 # \param graph The graph on which to compute the pinning weights
 # \param neighbor_influence [0, 1], a higher value will reduce the influence of the neighbors of a node on its displacement
 def compute_pinning_weights(graph, neighbor_influence):
+    compute_positioning_score(graph)  
     positioning_scores = graph.getDoubleProperty("positioningScore")
     pinning_weights = graph.getDoubleProperty("pinningWeight")
-    
-    neighbor_influence_complement = 1 - neighbor_influence
-    
+    neighbor_influence_complement = 1 - neighbor_influence  
     # local pass
     for n in graph.getNodes():
         neighbor_sum = 0
         for neighbor in graph.getInOutNodes(n):
             neighbor_sum += positioning_scores[neighbor]
         pinning_weights[n] = neighbor_influence * positioning_scores[n] * neighbor_influence_complement * (1 / graph.deg(n)) * neighbor_sum
-
     # global pass
     sets = compute_distance_to_node(graph)
-    d_cutoff = round(K * len(sets))
-
+    if len(sets) == 0: 
+        print("Unable to compute distance-to-node sets")
+        return
+    d_cutoff = round(K * len(sets) - 1)
     for i in range(len(sets)):
         for n in sets[i]:
-            if i <= d_cutoff:
-                pinning_weights = PINNING_WEIGHT_INIT ** (1 - (i / d_cutoff))
+            if i < d_cutoff:
+                pinning_weights[n] = PINNING_WEIGHT_INIT ** (1 - (i / d_cutoff))
             else:
                 pinning_weights[n] = 1      
 
 def run(graph):
-    compute_positioning_score(graph)
-    compute_pinning_weights(graph)
+    compute_pinning_weights(graph, NEIGHBOR_INFLUENCE)
 
 def main(graph):
     run(graph)

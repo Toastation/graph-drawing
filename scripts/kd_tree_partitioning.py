@@ -1,5 +1,3 @@
-## Names of partition sub-graphs follow the format "partition_{#number}"
-
 from tulip import tlp
 from collections import deque
 import math
@@ -7,6 +5,10 @@ import random
 
 PARTITION_SIZE = 100
 
+## \brief Computes the partitions of the graph
+# \param graph The graph to partition
+# \param max_partition_size The maximum size of a partition
+# \return A list of list of tlp.node corresponding to each partition
 def run(graph, max_partition_size):
     if graph.numberOfNodes() <= max_partition_size: return [graph.nodes()]
      
@@ -32,17 +34,6 @@ def run(graph, max_partition_size):
             # terminate when we have reached the ideal partition size             
             quit = (p_size // 2 if p_size % 2 == 0 else (p_size // 2) + 1) <= max_partition_size            
         count += 1
-    
-    colors = graph.getColorProperty("viewColor")
-    max_size = 0
-    for p in partitions:
-        p_size = len(p)
-        if p_size > max_size: max_size = p_size
-        r = random.randrange(255)
-        g = random.randrange(255)
-        b = random.randrange(255)
-        for n in p:
-            colors[n] = tlp.Color(r, g, b)
     return partitions
 
 
@@ -76,28 +67,32 @@ def run(graph, max_partition_size):
 #                 p_count += 2         
 #         count += 1
 
-## delete all partitions of graph
+## \brief Deletes every partition of the graph
+# \param graph The graph on which we delete all partitions
 def delete_partitions(graph):
     for sub in graph.getSubGraphs():
         if sub.getName().startswith("partition"):
             graph.delSubGraph(sub)
 
-## create partition sub-graphs from a list of list of nodes 
+## \brief Creates partition sub-graphs from a list of list of nodes
+# \param graph The graph which will receive the partition sub-graphs
+# \param partitions A list of list of tlp.node corresponding to each partition
 def create_subgraphs(graph, partitions):
     count = 0
     for p in partitions:
         graph.inducedSubGraph(p, None, "partition_{}".format(count))
         count += 1
 
-# returns a list of the graph partitions (sub-graph)
+## \brief Returns a list of the graph partitions (sub-graph)
+# \return Returns a list of list of tlp.node corresponding to each partition
 def get_partitions(graph):
     partitions = [p for p in graph.getSubGraphs() if p.getName().startswith("partition")]
     return partitions if len(partitions) > 0 else [graph]
 
-def main(graph):
-    partitions = run(graph, PARTITION_SIZE)
-
-    # DEBUG
+## \brief Colors the nodes according to the partition they belong in, and prints the size of the largest partition found.
+# \param graph The graph containing the partitions
+# \param partitions A list of list of tlp.node corresponding to each partition
+def debug(graph, partitions):
     colors = graph.getColorProperty("viewColor")
     max_size = 0
     for p in partitions:
@@ -108,6 +103,11 @@ def main(graph):
         b = random.randrange(255)
         for n in p:
             colors[n] = tlp.Color(r, g, b)
-    print("max_size : {}".format(max_size))
+    print("max partition size found : {}".format(max_size))
+
+def main(graph):
+    partitions = run(graph, PARTITION_SIZE)
+    debug(graph, partitions)
+    
     
     
