@@ -70,6 +70,7 @@ def run(parent_graph, iterations):
         edge = find_next_collapse(graph)
         if edge:
             edge_collapse(parent_graph, graph, edge)
+    return graph
 
 def main(graph):
     run(graph, MAX_ITERATIONS)

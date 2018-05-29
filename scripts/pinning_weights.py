@@ -22,31 +22,28 @@ def compute_positioning_score(graph):
     dalpha = 360 / graph.numberOfNodes()
     alpha = 0
     radius = 1
-
     for n in is_new_node.getNodesEqualTo(False):
-        positioning_scores[n] = 1  
+        positioning_scores[n] = 1
+        positioned[n] = True
+    for n in graph.bfs():
+        if is_new_node[n]:
+            positioned_neighbors = [neighbor for neighbor in graph.getInOutNodes(n) if positioned[neighbor]]
+            nb_positioned = len(positioned_neighbors)    
 
-    new_nodes_graph = graph.addSubGraph(is_new_node, "newNodes")        
-
-    for n in new_nodes_graph.bfs():
-        positioned_neighbors = [neighbor for neighbor in graph.getInOutNodes(n) if positioned[neighbor]]
-        nb_positioned = len(unpositioned_neighbors)    
-
-        if nb_positioned >= 2:
-            positioning_scores[n] = 0.25
-            layout[n] = tlp.Vec3f()
-            for neighbor in positioned_neighbors: 
-                layout[n] += layout[neighbor]
-            layout[n] /=  nb_positioned
-            positioned[n] = True
-        elif nb_positioned == 1:
-            positioning_scores[n] = 0.1
-            layout[n] = (layout[positioned_neighbors[0]] + center_coord) / 2             
-        else:
-            positioning_scores[n] = 0            
-            layout[n] = tlp.Vec3f(center_coord.x() + radius * math.cos(alpha), center_coord.x() + radius * math.sin(alpha))
-            alpha += dalpha
-    graph.delSubGraph(new_nodes_graph)
+            if nb_positioned >= 2:
+                positioning_scores[n] = 0.25
+                layout[n] = tlp.Vec3f()
+                for neighbor in positioned_neighbors: 
+                    layout[n] += layout[neighbor]
+                layout[n] /=  nb_positioned
+                positioned[n] = True
+            elif nb_positioned == 1:
+                positioning_scores[n] = 0.1
+                layout[n] = (layout[positioned_neighbors[0]] + center_coord) / 2             
+            else:
+                positioning_scores[n] = 0            
+                layout[n] = tlp.Vec3f(center_coord.x() + radius * math.cos(alpha), center_coord.x() + radius * math.sin(alpha))
+                alpha += dalpha
     graph.delLocalProperty("positioned")    
 
 ## \brief Computes a series of sets in the following manner:
@@ -68,6 +65,7 @@ def compute_distance_to_node(graph):
             for neighbor in graph.getInOutNodes(n):
                 if not in_set[neighbor]:
                     next_set.append(neighbor)
+                    in_set[neighbor] = True
         if len(next_set) == 0: break 
         distance_to_node.append(next_set)
         current_set_index += 1
@@ -91,9 +89,10 @@ def compute_pinning_weights(graph, neighbor_influence):
         neighbor_sum = 0
         for neighbor in graph.getInOutNodes(n):
             neighbor_sum += positioning_scores[neighbor]
-        pinning_weights[n] = neighbor_influence * positioning_scores[n] * neighbor_influence_complement * (1 / graph.deg(n)) * neighbor_sum
+        pinning_weights[n] = neighbor_influence * positioning_scores[n] + neighbor_influence_complement * (1.0 / graph.deg(n)) * neighbor_sum
     # global pass
     sets = compute_distance_to_node(graph)
+    print(len(sets))
     if len(sets) == 0: 
         print("Unable to compute distance-to-node sets")
         return
@@ -105,8 +104,16 @@ def compute_pinning_weights(graph, neighbor_influence):
             else:
                 pinning_weights[n] = 1      
 
+def debug(graph):
+    pinning_weights = graph.getDoubleProperty("pinningWeight")
+    vc = graph.getColorProperty("viewColor")
+    for n in graph.getNodes():
+        g = round(pinning_weights[n] * 255)
+        vc[n] = tlp.Color(0, int(g), 0)        
+
 def run(graph):
     compute_pinning_weights(graph, NEIGHBOR_INFLUENCE)
+    debug(graph)
 
 def main(graph):
     run(graph)
