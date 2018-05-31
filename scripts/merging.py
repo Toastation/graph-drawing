@@ -173,8 +173,6 @@ class MergerFMMM():
         for n in graph.getNodes():
             if can_move[n]:
                 color[n] = tlp.Color(255,127,80)
-        print("script paused")
-        pauseScript()
 
     def run(self, graph, debug=False):
         self._position_nodes(graph)
