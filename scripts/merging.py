@@ -138,13 +138,11 @@ class MergerFMMM():
         bounding_box = tlp.computeBoundingBox(graph)
         new_edges = (e for e in graph.getEdges() if is_new_edge[e])
         new_nodes = []
-
         for n in graph.getNodes():
             if not is_new_node[n]:
                 positioned[n] = True # TODO: should be computed only on the first graph of the timeline 
             else:
                 new_nodes.append(n)
-        
         for n in new_nodes:
             can_move[n] = True
             positioned_neighbors = [neighbor for neighbor in graph.getInOutNodes(n) if positioned[neighbor]]
@@ -162,7 +160,6 @@ class MergerFMMM():
                     can_move[neighbor] = True
                 pos[n] = sum_pos / nb_positioned_neighbors
             positioned[n] = True
-
         for e in new_edges:
             can_move[graph.source(e)] = True
             can_move[graph.target(e)] = True
