@@ -122,7 +122,7 @@ class FrishmanMerger:
     def run(graph):
         self._compute_pinning_weights(graph)
 
-class MergerFMMM():
+class MergerFMMM:
 
     def __init__(self):
         self._desired_length = DESIRED_LENGTH
