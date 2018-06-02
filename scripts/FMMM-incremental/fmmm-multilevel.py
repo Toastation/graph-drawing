@@ -53,6 +53,10 @@ class MIESMerger(Merger):
     def __init__(self):
         pass
 
+    ## \brief Merge two adjacent nodes into one metanode. The metanode is positioned at the center of the nodes and it is able
+    # to move if at least one of its inner nodes can. The coarsening weight of the metanode is the sum of its 2 inner nodes
+    # \param graph The graph containing the nodes, and in which the metanode will be added
+    # \param n1, n2 The nodes to merge
     def _merge(self, graph, n1, n2):
         pos = graph.getLayoutProperty("viewLayout")
         weights = graph.getIntegerProperty("cWeights")        
@@ -63,6 +67,8 @@ class MIESMerger(Merger):
         pos[metanode] = metanode_pos
         can_move[metanode] = metanode_can_move
 
+    ## \brief Compute a coarser represention of the graph
+    # \param graph The graph from which to compute the coarser representation
     def build_next_level(self, graph):
         matched = graph.getLocalBooleanProperty("matched")
         weights = graph.getIntegerProperty("cWeights")                
@@ -100,16 +106,24 @@ class Multilevel:
         self._finest_iterations = FINEST_ITERATIONS
         self._nb_nodes_threshold = NB_NODES_THRESHOLD        
         self._merger = MIESMerger()
-    
-    def run(self, root):
+
+    def _compute_coarser_graph_series(self, root):
         current_level = 0
         graph = root.addCloneSubGraph("level_0")
         self._merger.init_weight(graph)
+        coarser_graph_series = []
+        coarser_graph_series.append(graph)
         while True:
             current_level += 1
             self._merger.build_next_level(graph)
-            if graph.numberOfNodes() <= self._nb_nodes_threshold: break
-            else: graph = graph.addCloneSubGraph("level_{}".format(current_level))
+            if graph.numberOfNodes() <= self._nb_nodes_threshold: 
+                break
+            else: 
+                graph = graph.addCloneSubGraph("level_{}".format(current_level))
+                coarser_graph_series.append(graph)
+
+    def run(self, root):
+        coarser_graph_series = self._compute_coarser_graph_series(root)
 
 # Tulip script
 def main(graph):
