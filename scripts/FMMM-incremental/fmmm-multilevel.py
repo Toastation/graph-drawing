@@ -60,12 +60,14 @@ class MIESMerger(Merger):
     def _merge(self, graph, n1, n2):
         pos = graph.getLayoutProperty("viewLayout")
         weights = graph.getIntegerProperty("cWeights")        
-        can_move = graph.getLocalBooleanProperty("canMove")
+        can_move = graph.getBooleanProperty("canMove")
+        merged_node = graph.getLocalBooleanProperty("mergedNode")
         metanode_can_move = can_move[n1] or can_move[n2]
         metanode_pos = (pos[n1] + pos[n2]) / 2
         metanode = graph.createMetaNode([n1, n2])
         pos[metanode] = metanode_pos
         can_move[metanode] = metanode_can_move
+        merged_node[metanode] = True
 
     ## \brief Compute a coarser represention of the graph
     # \param graph The graph from which to compute the coarser representation
@@ -93,7 +95,8 @@ class MIESMerger(Merger):
         for (n1, n2) in matched_nodes:
             self._merge(graph, n1, n2)
 
-    ## \brief initialises the coarsening weights of the graph, should only be called once on the finest graph
+    ## \brief Initialises the coarsening weights of the graph, should only be called once on the finest graph
+    # \param graph The graph on which to compute the weights
     def init_weight(self, graph):
         weights = graph.getIntegerProperty("cWeights")
         for n in graph.getNodes():
@@ -104,7 +107,7 @@ class Multilevel:
     def __init__(self):
         self._coarsest_iterations = COARSET_ITERATIONS
         self._finest_iterations = FINEST_ITERATIONS
-        self._nb_nodes_threshold = NB_NODES_THRESHOLD        
+        self._nb_nodes_threshold = NB_NODES_THRESHOLD
         self._merger = MIESMerger()
 
     def _compute_coarser_graph_series(self, root):
@@ -122,8 +125,22 @@ class Multilevel:
                 graph = graph.addCloneSubGraph("level_{}".format(current_level))
                 coarser_graph_series.append(graph)
 
+    def _interpolate_to_higher_level(self, graph):
+        merged_node = graph.getLocalBooleanProperty("mergedNode")        
+        for n in graph.getNodes():
+            if merged_node[n] and graph.isMetaNode(n) :
+                graph.openMetaNode(n)
+
     def run(self, root):
         coarser_graph_series = self._compute_coarser_graph_series(root)
+        if len(coarser_graph_series) == 0:
+            print("Error while computening coarser graph series")
+            return False
+        current_level = len(coarser_graph_series) - 1
+        for i in range(current_level, -1, -1):
+            pass #compute layout and interpolate
+        return True
+        
 
 # Tulip script
 def main(graph):
