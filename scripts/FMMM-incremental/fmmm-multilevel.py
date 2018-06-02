@@ -124,6 +124,7 @@ class Multilevel:
             else: 
                 graph = graph.addCloneSubGraph("level_{}".format(current_level))
                 coarser_graph_series.append(graph)
+        return coarser_graph_series
 
     def _interpolate_to_higher_level(self, graph):
         merged_node = graph.getLocalBooleanProperty("mergedNode")        
@@ -138,7 +139,11 @@ class Multilevel:
             return False
         current_level = len(coarser_graph_series) - 1
         for i in range(current_level, -1, -1):
-            pass #compute layout and interpolate
+            #params = tlp.getDefaultPluginParameters("Fast Multipole Embedder (OGDF)", coarser_graph_series[i])               
+            coarser_graph_series[i].applyLayoutAlgorithm("Frutcherman Reingold (OGDF)")        
+            self._interpolate_to_higher_level(coarser_graph_series[i])
+            pauseScript()
+            #if i > 0: coarser_graph_series[i - 1].delSubGraph(coarser_graph_series[i])
         return True
         
 
