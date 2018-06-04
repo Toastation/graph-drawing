@@ -5,6 +5,7 @@ import random
 COARSET_ITERATIONS = 250
 FINEST_ITERATIONS = 30
 NB_NODES_THRESHOLD = 50
+DESIRED_EDGE_LENGTH = 1
 LINKING_MAX_DIST = 2
 
 class Merger(ABC):
@@ -108,6 +109,7 @@ class Multilevel:
         self._coarsest_iterations = COARSET_ITERATIONS
         self._finest_iterations = FINEST_ITERATIONS
         self._nb_nodes_threshold = NB_NODES_THRESHOLD
+        self._desired_edge_length = DESIRED_EDGE_LENGTH
         self._merger = MIESMerger()
 
     def _compute_coarser_graph_series(self, root):
@@ -117,19 +119,19 @@ class Multilevel:
         coarser_graph_series = []
         coarser_graph_series.append(graph)
         while True:
-            current_level += 1
-            self._merger.build_next_level(graph)
             if graph.numberOfNodes() <= self._nb_nodes_threshold: 
-                break
+                break          
             else: 
+                current_level += 1
+                self._merger.build_next_level(graph)
                 graph = graph.addCloneSubGraph("level_{}".format(current_level))
                 coarser_graph_series.append(graph)
         return coarser_graph_series
 
-    def _interpolate_to_higher_level(self, graph):
+    def _interpolate_to_higher_level(self, graph, root):            
         merged_node = graph.getLocalBooleanProperty("mergedNode")        
         for n in graph.getNodes():
-            if merged_node[n] and graph.isMetaNode(n) :
+            if merged_node[n] and graph.isMetaNode(n):             
                 graph.openMetaNode(n)
 
     def run(self, root):
@@ -139,10 +141,9 @@ class Multilevel:
             return False
         current_level = len(coarser_graph_series) - 1
         for i in range(current_level, -1, -1):
-            #params = tlp.getDefaultPluginParameters("Fast Multipole Embedder (OGDF)", coarser_graph_series[i])               
-            coarser_graph_series[i].applyLayoutAlgorithm("Frutcherman Reingold (OGDF)")        
-            self._interpolate_to_higher_level(coarser_graph_series[i])
-            pauseScript()
+            #params = tlp.getDefaultPluginParameters("Fast Multipole Embedder (OGDF)", coarser_graph_series[i])
+            coarser_graph_series[i].applyLayoutAlgorithm("Frutcherman Reingold (OGDF)")     
+            self._interpolate_to_higher_level(coarser_graph_series[i], root)
             #if i > 0: coarser_graph_series[i - 1].delSubGraph(coarser_graph_series[i])
         return True
         
