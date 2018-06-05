@@ -15,14 +15,13 @@ class KDTree(NodeMixin):
         self.center = center
         self.radius = radius
 
-
 class MultipoleExpansion:
 
     def __init__(self):
         self._precision = P
         self._vertices_threshold = VERTICES_THRESHOLD
 
-    ## \brief Compute the coefficient of the multipole expansion of a node
+    ## \brief Computes the coefficient of the multipole expansion of a node
     # \param pos The viewLayout of the graph
     # \param node A node of the kd-tree
     # \return A list of complex numbers
@@ -38,7 +37,12 @@ class MultipoleExpansion:
                 z_v_minus_z0_over_k *= z_v - z_0
         node.coef = coef
 
-    def _build_node(self, pos, node, level):
+    ## \brief Builds recursively the kd-tree under a node, if the computed children have a number of vertices less than the threshold,
+    # stop the recusion.
+    # \param pos The viewLayout of the graph 
+    # \param node The node from which to construct the kd-tree
+    # \param level The current depth of the tree, used for determining on which axis we should split the vertices
+    def _build_children(self, pos, node, level):
         vertices = node.subgraph.nodes()
         vertices.sort(key = lambda n : pos[n].x()) if level % 2 == 0 else vertices.sort(key = lambda n : pos[n].y())
         median_index = len(vertices) // 2
@@ -51,17 +55,21 @@ class MultipoleExpansion:
         self._compute_coef(pos, left_child)  # TODO: compute them after with multipole expansion shifting from the leaves
         self._compute_coef(pos, right_child)
         if max(left_subgraph.numberOfNodes(), right_subgraph.numberOfNodes()) > self._vertices_threshold:
-            self._build_node(pos, left_child, level + 1)
-            self._build_node(pos, right_child, level + 1)            
+            self._build_children(pos, left_child, level + 1)
+            self._build_children(pos, right_child, level + 1)            
         else:
             return 
 
+    ## \brief Builds a 2D-tree from the given graph, where each node of the tree store a subgraph and its corresponding coefficients of the 
+    # multipole expansion. The subgraphs are evenly split from the median node of the x/y axis alternatively.
+    # \param graph The graph to compute the KD-tree from
+    # \return The root of the tree
     def build_tree(self, graph):
         pos = graph.getLayoutProperty("viewLayout")
         (center, farthest_point) = tlp.computeBoundingRadius(graph)
         root = KDTree(None, graph, center, center.dist(farthest_point))
         self._compute_coef(pos, root)
-        self._build_node(pos, root, 0)
+        self._build_children(pos, root, 0)
         return root
 
 def main(graph):
