@@ -1,20 +1,8 @@
 from tulip import tlp
-from anytree import NodeMixin
-import math
 
 DEFAULT_ITERATIONS = 1000
 REPL_CONST = 4.0
 DL = 0.055
-P = 4   # P-term multipole expansion
-
-class KDTree(NodeMixin):
-    _p = P
-
-    def __init__(self, parent, vertices):
-        super(NodeMixin, self).__init__()
-        self.parent = parent
-        self.vertices = vertices
-        self._compute()
 
 class FMMMLayout:
 
@@ -39,8 +27,6 @@ class FMMMLayout:
         node.center = center
         node.radius = self.center.dist(farthest_point)
 
-        # compute potential of vertices
-        
 
 
     def _create_kd_tree(graph):
