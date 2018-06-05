@@ -1,9 +1,9 @@
 from tulip import tlp
-from anytree import NodeMixin, RenderTree
+from anytree import NodeMixin, RenderTree, AsciiStyle
 import cmath
 
 P = 4   # P-term multipole expansion
-VERTICES_THRESHOLD = 4
+VERTICES_THRESHOLD = 4 # max number of vertices in the leaves of the kd-tree
 
 class KDTree(NodeMixin):
 
@@ -75,7 +75,7 @@ class MultipoleExpansion:
 def main(graph):
     m = MultipoleExpansion()
     root = m.build_tree(graph)
-    print(RenderTree(root))
+    print(RenderTree(root, style=AsciiStyle()).by_attr("radius"))
 
         
 

@@ -83,6 +83,7 @@ def run(graph, iterations):
             else: disp[n] = tlp.Vec3f()
             total_disp += min(disp_norm, t)
             layout[n] += disp[n]
+            disp[n] = tlp.Vec3f()
             if total_disp < conv_threshold: quit = True
         quit = it > iterations or quit # maybe infinite if conv_threshold is too low...
         it += 1
