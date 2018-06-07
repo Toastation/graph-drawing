@@ -1,9 +1,11 @@
 from tulip import tlp
-from anytree import NodeMixin, RenderTree, AsciiStyle
+from anytree import NodeMixin, RenderTree, AsciiStyle, PreOrderIter
 import cmath
+import math
+import random
 
 P = 4   # P-term multipole expansion
-VERTICES_THRESHOLD = 4 # max number of vertices in the leaves of the kd-tree
+VERTICES_THRESHOLD = 200 # max number of vertices in the leaves of the kd-tree
 
 class KDTree(NodeMixin):
 
@@ -11,7 +13,6 @@ class KDTree(NodeMixin):
         super(NodeMixin, self).__init__()
         self.parent = parent
         self.subgraph = subgraph
-        self.vertices = self.subgraph.getNodes()
         self.center = center
         self.radius = radius
 
@@ -29,7 +30,7 @@ class MultipoleExpansion:
         z_0 = complex(node.center.x(), node.center.y())
         coef = [complex(0, 0), complex(0, 0), complex(0, 0), complex(0, 0), complex(0, 0)]
         coef[0] += node.subgraph.numberOfNodes() # Q
-        for v in node.vertices:
+        for v in node.subgraph.getNodes():
             z_v = complex(pos[v].x(), pos[v].y())
             z_v_minus_z0_over_k = z_v - z_0
             for k in range(1, self._precision + 1):
@@ -47,7 +48,7 @@ class MultipoleExpansion:
         vertices.sort(key = lambda n : pos[n].x()) if level % 2 == 0 else vertices.sort(key = lambda n : pos[n].y())
         median_index = len(vertices) // 2
         left_subgraph = node.subgraph.inducedSubGraph(vertices[:median_index])
-        right_subgraph = node.subgraph.inducedSubGraph(vertices[:median_index])
+        right_subgraph = node.subgraph.inducedSubGraph(vertices[median_index:])
         (left_center, left_farthest_point) = tlp.computeBoundingRadius(left_subgraph)
         (right_center, right_farthest_point) = tlp.computeBoundingRadius(right_subgraph)       
         left_child = KDTree(node, left_subgraph, left_center, left_center.dist(left_farthest_point))
@@ -65,17 +66,32 @@ class MultipoleExpansion:
     # \param graph The graph to compute the KD-tree from
     # \return The root of the tree
     def build_tree(self, graph):
+        for g in graph.getSubGraphs():
+            graph.delAllSubGraphs(g)
         pos = graph.getLayoutProperty("viewLayout")
         (center, farthest_point) = tlp.computeBoundingRadius(graph)
+        #print("center: {} | farthest point: {} | dist: {}".format(center, farthest_point, center.dist(farthest_point)))
         root = KDTree(None, graph, center, center.dist(farthest_point))
+        if graph.numberOfNodes() <= self._vertices_threshold: return root
         self._compute_coef(pos, root)
         self._build_children(pos, root, 0)
+        self.debug(graph, root)
         return root
+
+    def debug(self, graph, tree):
+        color = graph.getColorProperty("viewColor")
+        nodes = [n for n in PreOrderIter(tree)]
+        leaves = [n for n in nodes if n.is_leaf]
+        for l in leaves:
+            rcolor = tlp.Color(random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
+            for v in l.subgraph.getNodes():
+                color[v] = rcolor
 
 def main(graph):
     m = MultipoleExpansion()
     root = m.build_tree(graph)
-    print(RenderTree(root, style=AsciiStyle()).by_attr("radius"))
+    #m.debug(graph, root)
+    #print(RenderTree(root, style=AsciiStyle()).by_attr("radius"))
 
         
 

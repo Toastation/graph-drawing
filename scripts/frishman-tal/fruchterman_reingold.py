@@ -36,7 +36,7 @@ def run(graph, iterations):
     t = 200 # cst = 0.04
     t_f = 0.9
     conv_threshold = 6.0 / N
-    max_partition_size = 20
+    max_partition_size = math.sqrt(N)
 
     layout = graph.getLayoutProperty("viewLayout")
     disp = graph.getLayoutProperty("disp")

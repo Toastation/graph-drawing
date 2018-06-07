@@ -1,5 +1,7 @@
 from tulip import tlp
 from abc import ABC, abstractmethod
+from fmmm_layout import FMMMLayout
+import fruchterman_reingold
 import random
 
 COARSET_ITERATIONS = 250
@@ -60,6 +62,7 @@ class MIESMerger(Merger):
     # \param n1, n2 The nodes to merge
     def _merge(self, graph, n1, n2):
         pos = graph.getLayoutProperty("viewLayout")
+        size = graph.getSizeProperty("viewSize")
         weights = graph.getIntegerProperty("cWeights")        
         can_move = graph.getBooleanProperty("canMove")
         merged_node = graph.getLocalBooleanProperty("mergedNode")
@@ -69,6 +72,7 @@ class MIESMerger(Merger):
         pos[metanode] = metanode_pos
         can_move[metanode] = metanode_can_move
         merged_node[metanode] = True
+        #size[metanode] = tlp.Size(1, 1, 1)
 
     ## \brief Compute a coarser represention of the graph
     # \param graph The graph from which to compute the coarser representation
@@ -111,6 +115,7 @@ class Multilevel:
         self._nb_nodes_threshold = NB_NODES_THRESHOLD
         self._desired_edge_length = DESIRED_EDGE_LENGTH
         self._merger = MIESMerger()
+        self._layout = FMMMLayout()
 
     def _compute_coarser_graph_series(self, root):
         current_level = 0
@@ -128,11 +133,14 @@ class Multilevel:
                 coarser_graph_series.append(graph)
         return coarser_graph_series
 
-    def _interpolate_to_higher_level(self, graph, root):            
+    def _interpolate_to_higher_level(self, graph, root):           
+        pos = root.getLayoutProperty("viewLayout")
         merged_node = graph.getLocalBooleanProperty("mergedNode")        
         for n in graph.getNodes():
-            if merged_node[n] and graph.isMetaNode(n):             
+            if merged_node[n] and graph.isMetaNode(n):          
+                metanode_pos = pos[n]
                 graph.openMetaNode(n)
+                # move the inner nodes
 
     def run(self, root):
         coarser_graph_series = self._compute_coarser_graph_series(root)
@@ -140,9 +148,14 @@ class Multilevel:
             print("Error while computening coarser graph series")
             return False
         current_level = len(coarser_graph_series) - 1
+        deepest_level = current_level
+        iter_range = self._coarsest_iterations - self._finest_iterations
         for i in range(current_level, -1, -1):
             #params = tlp.getDefaultPluginParameters("Fast Multipole Embedder (OGDF)", coarser_graph_series[i])
-            coarser_graph_series[i].applyLayoutAlgorithm("Frutcherman Reingold (OGDF)")     
+            #coarser_graph_series[i].applyLayoutAlgorithm("Frutcherman Reingold (OGDF)")
+            iterations = ((current_level / deepest_level) * iter_range) + self._finest_iterations
+            #fruchterman_reingold.run(coarser_graph_series[i], int(iterations))
+            self._layout.run(coarser_graph_series[i], int(iterations))
             self._interpolate_to_higher_level(coarser_graph_series[i], root)
             #if i > 0: coarser_graph_series[i - 1].delSubGraph(coarser_graph_series[i])
         return True
