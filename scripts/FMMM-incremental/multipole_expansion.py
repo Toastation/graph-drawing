@@ -66,6 +66,7 @@ class MultipoleExpansion:
     # \param graph The graph to compute the KD-tree from
     # \return The root of the tree
     def build_tree(self, graph):
+        self._vertices_threshold = math.sqrt(graph.numberOfNodes())
         for g in graph.getSubGraphs():
             graph.delAllSubGraphs(g)
         pos = graph.getLayoutProperty("viewLayout")
@@ -92,7 +93,3 @@ def main(graph):
     root = m.build_tree(graph)
     #m.debug(graph, root)
     #print(RenderTree(root, style=AsciiStyle()).by_attr("radius"))
-
-        
-
-                

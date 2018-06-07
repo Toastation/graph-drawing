@@ -4,11 +4,17 @@ from fmmm_layout import FMMMLayout
 import fruchterman_reingold
 import random
 
-COARSET_ITERATIONS = 250
+COARSET_ITERATIONS = 300
 FINEST_ITERATIONS = 30
 NB_NODES_THRESHOLD = 50
 DESIRED_EDGE_LENGTH = 1
 LINKING_MAX_DIST = 2
+
+def translate(value, left_min, left_max, right_min, right_max):
+    left_span = left_max - left_min
+    right_span = right_max - right_min
+    value_scaled = (value - left_min) / left_span # 0, 1 range
+    return right_min + value_scaled * right_span
 
 class Merger(ABC):
 
@@ -135,14 +141,15 @@ class Multilevel:
 
     def _interpolate_to_higher_level(self, graph, root):           
         pos = root.getLayoutProperty("viewLayout")
+        size = root.getSizeProperty("viewSize")
         merged_node = graph.getLocalBooleanProperty("mergedNode")        
         for n in graph.getNodes():
             if merged_node[n] and graph.isMetaNode(n):          
                 metanode_pos = pos[n]
                 inner_nodes = graph.getNodeMetaInfo(n).nodes()                
                 graph.openMetaNode(n)
-                pos[inner_nodes[0]] = metanode_pos + tlp.Vec3f(-0.1)
-                pos[inner_nodes[1]] = metanode_pos + tlp.Vec3f(0.1)
+                pos[inner_nodes[0]] = metanode_pos + tlp.Vec3f(-1)
+                pos[inner_nodes[1]] = metanode_pos + tlp.Vec3f(1)
 
     def run(self, root):
         coarser_graph_series = self._compute_coarser_graph_series(root)
@@ -152,18 +159,13 @@ class Multilevel:
         current_level = len(coarser_graph_series) - 1
         deepest_level = current_level
         iter_range = self._coarsest_iterations - self._finest_iterations
+        self._layout.run2(coarser_graph_series[-1], 300)
         for i in range(current_level, -1, -1):
-            #params = tlp.getDefaultPluginParameters("Fast Multipole Embedder (OGDF)", coarser_graph_series[i])
-            #coarser_graph_series[i].applyLayoutAlgorithm("Frutcherman Reingold (OGDF)")
-            updateVisualization()
-            pauseScript()
-            iterations = ((current_level / deepest_level) * iter_range) + self._finest_iterations
-            #fruchterman_reingold.run(coarser_graph_series[i], int(iterations))
-            self._layout.run2(coarser_graph_series[i], 300)
+            iterations = translate(i, 0, deepest_level, self._finest_iterations, self._coarsest_iterations)
             self._interpolate_to_higher_level(coarser_graph_series[i], root)
+            #self._layout.run2(coarser_graph_series[i], 300)        
             #if i > 0: coarser_graph_series[i - 1].delSubGraph(coarser_graph_series[i])
-        return True
-        
+        return True        
 
 # Tulip script
 def main(graph):

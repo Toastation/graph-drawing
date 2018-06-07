@@ -114,7 +114,7 @@ class FMMMLayout:
         R = 0.05
         N = graph.numberOfNodes()    
         t = 200 # cst = 0.04
-        t_f = 0.9
+        t_f = 0.95
         conv_threshold = 6 / N
         max_partition_size = 20
 
