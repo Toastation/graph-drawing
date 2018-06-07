@@ -5,7 +5,7 @@ import math
 import random
 
 P = 4   # P-term multipole expansion
-VERTICES_THRESHOLD = 200 # max number of vertices in the leaves of the kd-tree
+VERTICES_THRESHOLD = 4 # max number of vertices in the leaves of the kd-tree
 
 class KDTree(NodeMixin):
 

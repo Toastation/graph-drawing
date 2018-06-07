@@ -139,8 +139,10 @@ class Multilevel:
         for n in graph.getNodes():
             if merged_node[n] and graph.isMetaNode(n):          
                 metanode_pos = pos[n]
+                inner_nodes = graph.getNodeMetaInfo(n).nodes()                
                 graph.openMetaNode(n)
-                # move the inner nodes
+                pos[inner_nodes[0]] = metanode_pos + tlp.Vec3f(-0.1)
+                pos[inner_nodes[1]] = metanode_pos + tlp.Vec3f(0.1)
 
     def run(self, root):
         coarser_graph_series = self._compute_coarser_graph_series(root)
@@ -153,9 +155,11 @@ class Multilevel:
         for i in range(current_level, -1, -1):
             #params = tlp.getDefaultPluginParameters("Fast Multipole Embedder (OGDF)", coarser_graph_series[i])
             #coarser_graph_series[i].applyLayoutAlgorithm("Frutcherman Reingold (OGDF)")
+            updateVisualization()
+            pauseScript()
             iterations = ((current_level / deepest_level) * iter_range) + self._finest_iterations
             #fruchterman_reingold.run(coarser_graph_series[i], int(iterations))
-            self._layout.run(coarser_graph_series[i], int(iterations))
+            self._layout.run2(coarser_graph_series[i], 300)
             self._interpolate_to_higher_level(coarser_graph_series[i], root)
             #if i > 0: coarser_graph_series[i - 1].delSubGraph(coarser_graph_series[i])
         return True
