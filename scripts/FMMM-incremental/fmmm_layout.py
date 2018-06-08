@@ -45,6 +45,7 @@ class FMMMLayout:
             dist = pos[vertex] - node.center
             if dist.norm() > node.radius: # compute approximate repl forces
                 disp[vertex] += node.subgraph.numberOfNodes() * self._repulsive_force(dist)
+                return
             else:
                 if node.is_leaf: # compute exact repl forces
                     for v in node.subgraph.getNodes():
@@ -52,6 +53,7 @@ class FMMMLayout:
                             d = pos[vertex] - pos[v]
                             force = self._repulsive_force(d)
                             disp[vertex] += force
+                    return
                 else:
                     aux(node.children[0])
                     aux(node.children[1])
@@ -104,7 +106,7 @@ class FMMMLayout:
                 pos[n] += disp[n]
                 disp[n] = tlp.Vec3f()
             t *= self._cooling_factor
-            updateVisualization()
+            #updateVisualization()
             # TODO: conv threshold?
 
     def run2(self, graph, iterations = DEFAULT_ITERATIONS):
@@ -114,30 +116,31 @@ class FMMMLayout:
         R = 0.05
         N = graph.numberOfNodes()    
         t = 200 # cst = 0.04
-        t_f = 0.95
+        t_f = 0.9
         conv_threshold = 6 / N
         max_partition_size = 20
 
         layout = graph.getLayoutProperty("viewLayout")
         disp = graph.getLayoutProperty("disp")
+        can_move = graph.getBooleanProperty("canMove")
         quit = False
         it = 1
-
+      
         while not quit:
             total_disp = 0
-            if it <= 4 or it % 10 == 0: # recompute the tree for the first 4 iterations and then every 20 iterations
-                kd_tree = self._multipole_exp.build_tree(graph)
+            #if it <= 4 or it % 20 == 0: # recompute the tree for the first 4 iterations and then every 20 iterations
+            kd_tree = self._multipole_exp.build_tree(graph)
                 
             for n in graph.getNodes():
-                self._compute_repulsive_forces2(graph, n, kd_tree, K_r)
+                if can_move[n]: self._compute_repulsive_forces2(graph, n, kd_tree, K_r)
 
             for e in graph.getEdges():
                 u = graph.source(e)
                 v = graph.target(e)
                 dist = layout[u] - layout[v]
                 force = self._attractive_force2(dist, K_s, L)
-                disp[u] -= force
-                disp[v] += force
+                if can_move[u]: disp[u] -= force
+                if can_move[v]: disp[v] += force
 
             for n in graph.getNodes():
                 disp_norm = disp[n].norm()

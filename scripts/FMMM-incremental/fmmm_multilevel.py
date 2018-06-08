@@ -142,14 +142,18 @@ class Multilevel:
     def _interpolate_to_higher_level(self, graph, root):           
         pos = root.getLayoutProperty("viewLayout")
         size = root.getSizeProperty("viewSize")
+        can_move = root.getBooleanProperty("canMove")
         merged_node = graph.getLocalBooleanProperty("mergedNode")        
         for n in graph.getNodes():
             if merged_node[n] and graph.isMetaNode(n):
-                metanode_pos = pos[n]
-                inner_nodes = graph.getNodeMetaInfo(n).nodes()                
-                graph.openMetaNode(n)
-                pos[inner_nodes[0]] = metanode_pos + tlp.Vec3f(-1)
-                pos[inner_nodes[1]] = metanode_pos + tlp.Vec3f(1)
+                if can_move[n]:
+                    metanode_pos = pos[n]
+                    inner_nodes = graph.getNodeMetaInfo(n).nodes()                
+                    graph.openMetaNode(n)
+                    pos[inner_nodes[0]] = metanode_pos + tlp.Vec3f(-1)
+                    pos[inner_nodes[1]] = metanode_pos + tlp.Vec3f(1)
+                else:
+                    graph.openMetaNode(n)
 
     def run(self, root):
         coarser_graph_series = self._compute_coarser_graph_series(root)
@@ -163,7 +167,7 @@ class Multilevel:
         for i in range(current_level, -1, -1):
             iterations = translate(i, 0, deepest_level, self._finest_iterations, self._coarsest_iterations)
             self._interpolate_to_higher_level(coarser_graph_series[i], root)
-            #self._layout.run2(coarser_graph_series[i], 300)        
+            self._layout.run2(coarser_graph_series[i], 300)        
             #if i > 0: coarser_graph_series[i - 1].delSubGraph(coarser_graph_series[i])
         return True        
 
