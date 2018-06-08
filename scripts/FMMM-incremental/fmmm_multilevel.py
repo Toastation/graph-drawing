@@ -144,7 +144,7 @@ class Multilevel:
         size = root.getSizeProperty("viewSize")
         merged_node = graph.getLocalBooleanProperty("mergedNode")        
         for n in graph.getNodes():
-            if merged_node[n] and graph.isMetaNode(n):          
+            if merged_node[n] and graph.isMetaNode(n):
                 metanode_pos = pos[n]
                 inner_nodes = graph.getNodeMetaInfo(n).nodes()                
                 graph.openMetaNode(n)

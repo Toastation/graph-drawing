@@ -132,6 +132,7 @@ class MergerFMMM:
     def _position_nodes(self, graph):
         is_new_node = graph.getBooleanProperty("isNewNode")
         is_new_edge = graph.getBooleanProperty("isNewEdge")
+        adjacent_deleted_edge = graph.getBooleanProperty("adjDeletedEdge")        
         positioned = graph.getBooleanProperty("positioned")
         can_move = graph.getBooleanProperty("canMove")
         pos = graph.getLayoutProperty("viewLayout")
@@ -139,6 +140,8 @@ class MergerFMMM:
         new_edges = (e for e in graph.getEdges() if is_new_edge[e])
         new_nodes = []
         for n in graph.getNodes():
+            if adjacent_deleted_edge[n]:
+                can_move[n] = True
             if not is_new_node[n]:
                 positioned[n] = True # TODO: should be computed only on the first graph of the timeline 
             else:
