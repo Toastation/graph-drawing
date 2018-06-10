@@ -1,6 +1,6 @@
 from tulip import tlp
 from abc import ABC, abstractmethod
-from fmmm_layout import FMMMLayout
+from fmmm_layout import FMMMLayout, FMMMLayout2
 import fruchterman_reingold
 import random
 
@@ -121,7 +121,7 @@ class Multilevel:
         self._nb_nodes_threshold = NB_NODES_THRESHOLD
         self._desired_edge_length = DESIRED_EDGE_LENGTH
         self._merger = MIESMerger()
-        self._layout = FMMMLayout()
+        self._layout = FMMMLayout2()
 
     def _compute_coarser_graph_series(self, root):
         current_level = 0
@@ -153,7 +153,7 @@ class Multilevel:
                     pos[inner_nodes[0]] = metanode_pos + tlp.Vec3f(-1)
                     pos[inner_nodes[1]] = metanode_pos + tlp.Vec3f(1)
                 else:
-                    graph.openMetaNode(n)
+                    graph.openMetaNode(n, False)
 
     def run(self, root):
         coarser_graph_series = self._compute_coarser_graph_series(root)
@@ -163,11 +163,11 @@ class Multilevel:
         current_level = len(coarser_graph_series) - 1
         deepest_level = current_level
         iter_range = self._coarsest_iterations - self._finest_iterations
-        self._layout.run2(coarser_graph_series[-1], 300)
+        self._layout.run(coarser_graph_series[-1], 300)
         for i in range(current_level, -1, -1):
             iterations = translate(i, 0, deepest_level, self._finest_iterations, self._coarsest_iterations)
             self._interpolate_to_higher_level(coarser_graph_series[i], root)
-            self._layout.run2(coarser_graph_series[i], 300)        
+            self._layout.run(coarser_graph_series[i], 300)        
             #if i > 0: coarser_graph_series[i - 1].delSubGraph(coarser_graph_series[i])
         return True        
 
