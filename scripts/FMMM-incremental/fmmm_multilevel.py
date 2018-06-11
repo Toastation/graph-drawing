@@ -164,11 +164,11 @@ class Multilevel:
         current_level = len(coarser_graph_series) - 1
         deepest_level = current_level
         iter_range = self._coarsest_iterations - self._finest_iterations
-        self._layout.run(coarser_graph_series[-1], 300)
+        self._layout.run(coarser_graph_series[-1], 300, coarser_graph_series[-1].getBooleanProperty("canMove"))
         for i in range(current_level, -1, -1):
             iterations = translate(i, 0, deepest_level, self._finest_iterations, self._coarsest_iterations)
             self._interpolate_to_higher_level(coarser_graph_series[i], root)
-            self._layout.run(coarser_graph_series[i], 300)        
+            self._layout.run(coarser_graph_series[i], 300, coarser_graph_series[i].getBooleanProperty("canMove"))        
             #if i > 0: coarser_graph_series[i - 1].delSubGraph(coarser_graph_series[i])
         return True        
 

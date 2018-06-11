@@ -90,6 +90,12 @@ class FMMMLayout2():
         self.t_f = 0.9
         self.max_partition_size = 20
 
+    def set_init_temp(self, init_temp):
+        if init_temp < 0:
+            print("Initial temperature must be positive")
+            return
+        self.init_t = init_temp
+
     def _repulsive_force(self, dist_vec):
         dist_norm = dist_vec.norm()
         if dist_norm == 0: return tlp.Vec3f()
@@ -133,32 +139,26 @@ class FMMMLayout2():
                     aux(node.children[1])
         aux(node)
 
-    def run(self, graph, iterations = DEFAULT_ITERATIONS):
-        N = graph.numberOfNodes()
-        conv_threshold = 6 / N
-        t = self.init_t
+    def run(self, graph, iterations = DEFAULT_ITERATIONS, condition=None):
         layout = graph.getLayoutProperty("viewLayout")
         disp = graph.getLayoutProperty("disp")
-        can_move = graph.getBooleanProperty("canMove")
+        t = self.init_t
+        conv_threshold = 6 / graph.numberOfNodes()
         quit = False
         it = 1
-    
         while not quit:
             total_disp = 0
             if it <= 4 or it % 20 == 0: # recompute the tree for the first 4 iterations and then every 20 iterations
-                kd_tree = self._multipole_exp.build_tree(graph)
-                
+                kd_tree = self._multipole_exp.build_tree(graph)                
             for n in graph.getNodes():
-                if can_move[n]: self._compute_repulsive_forces(graph, n, kd_tree)
-
+                if not condition or condition[n]: self._compute_repulsive_forces(graph, n, kd_tree)
             for e in graph.getEdges():
                 u = graph.source(e)
                 v = graph.target(e)
                 dist = layout[u] - layout[v]
                 force = self._attractive_force(dist)
-                if can_move[u]: disp[u] -= force
-                if can_move[v]: disp[v] += force
-
+                if not condition or condition[u]: disp[u] -= force
+                if not condition or condition[v]: disp[v] += force
             for n in graph.getNodes():
                 disp_norm = disp[n].norm()
                 if disp_norm != 0: disp[n] = (disp[n] / disp_norm) * min(disp_norm, t)
