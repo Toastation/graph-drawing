@@ -1,7 +1,6 @@
 from tulip import tlp
 from abc import ABC, abstractmethod
 from fmmm_layout import FMMMLayout, FMMMLayout2
-import fruchterman_reingold
 import random
 
 COARSET_ITERATIONS = 300
@@ -147,7 +146,6 @@ class Multilevel:
         for n in graph.getNodes():
             if merged_node[n] and graph.isMetaNode(n):
                 if can_move[n]:
-                    print("yo")
                     metanode_pos = pos[n]
                     inner_nodes = graph.getNodeMetaInfo(n).nodes()                
                     graph.openMetaNode(n)

@@ -139,7 +139,7 @@ class FMMMLayout2():
                     aux(node.children[1])
         aux(node)
 
-    def run(self, graph, iterations = DEFAULT_ITERATIONS, condition=None):
+    def run(self, graph, iterations = DEFAULT_ITERATIONS, condition=None, const_temp=False):
         layout = graph.getLayoutProperty("viewLayout")
         disp = graph.getLayoutProperty("disp")
         t = self.init_t
@@ -169,7 +169,7 @@ class FMMMLayout2():
                 #if total_disp < conv_threshold: quit = True
             quit = it > iterations or quit # maybe infinite if conv_threshold is too low...
             it += 1
-            t *= self.t_f
+            if not const_temp: t *= self.t_f
             #updateVisualization()
         print("number if iterations done: {}".format(it))
 
