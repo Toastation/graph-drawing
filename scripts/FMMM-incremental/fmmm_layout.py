@@ -103,6 +103,15 @@ class FMMMLayout2():
         force = dist_vec * self.K_s * (dist_norm - self.L)
         return force / dist_norm
 
+    ## \brief Integral of the repulsive force
+    def repulsive_force_intgr(self, dist_vec):
+        return -(self.K_r / dist_vec.norm())
+
+    ## \brief Integral of the attractive force
+    def attractive_force_intgr(self, dist_vec):
+        dist_norm = dist_vec.norm()
+        return self.K_s * (((dist_norm * dist_norm) / 2) - (self.L * dist_norm)) 
+
     def _compute_repulsive_forces(self, graph, vertex, node):
         pos = graph.getLayoutProperty("viewLayout")
         disp = graph.getLayoutProperty("disp")

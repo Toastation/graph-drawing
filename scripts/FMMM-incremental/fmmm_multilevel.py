@@ -13,7 +13,7 @@ LINKING_MAX_DIST = 2
 def translate(value, left_min, left_max, right_min, right_max):
     left_span = left_max - left_min
     right_span = right_max - right_min
-    value_scaled = (value - left_min) / left_span # 0, 1 range
+    value_scaled = (value - left_min) / left_span # [0, 1] range
     return right_min + value_scaled * right_span
 
 class Merger(ABC):
@@ -147,6 +147,7 @@ class Multilevel:
         for n in graph.getNodes():
             if merged_node[n] and graph.isMetaNode(n):
                 if can_move[n]:
+                    print("yo")
                     metanode_pos = pos[n]
                     inner_nodes = graph.getNodeMetaInfo(n).nodes()                
                     graph.openMetaNode(n)
