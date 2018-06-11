@@ -3,6 +3,11 @@ import pinning_weights
 import multilevel
 import fruchterman_reingold 
 
+class FrishmanTal():
+    
+    def __init__(self):
+        pass
+
 def main(root_graph):
     pinning_weights.run(root_graph)
     #graph = multilevel.run(root_graph, multilevel.MAX_ITERATIONS)
