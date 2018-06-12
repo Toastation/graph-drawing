@@ -46,10 +46,10 @@ class FMMMIncremental:
         for e in graph.getEdges():
             if is_new_edge[e]: color[e] = tlp.Color(200, 20, 0)
 
-    def run(root):
+    def run(self, root):
         static_layout_algo = "FM^3 (OGDF)"
         subgraphs = list(root.getSubGraphs())
-        subgraphs.sort(key = lamba g : g.getId())
+        subgraphs.sort(key = lambda g : g.getId())
         if len(subgraphs) == 0:
             sg = root.addCloneSubGraph("timeline_0")
             sg.applyAlgorithm(static_layout_algo)
