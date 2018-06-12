@@ -1,6 +1,7 @@
 from tulip import tlp
 from fmmm_multilevel import Multilevel
 from fmmm_merger import MergerFMMM
+from fmmm_layout import FMMMLayout2
 
 IDEAL_EDGE_LENGTH = 10
 
@@ -10,6 +11,11 @@ class FMMMIncremental:
         self._ideal_edge_length = IDEAL_EDGE_LENGTH
         self._merger = MergerFMMM()
         self._multilevel = Multilevel()
+        self._layout = FMMMLayout2()
+        self.init_constants()
+
+    def init_constants(self):
+        self._iterations = 300        
 
     def _compute_difference(self, old_graph, new_graph):
         is_new_node = new_graph.getBooleanProperty("isNewNode")
@@ -46,7 +52,7 @@ class FMMMIncremental:
         for e in graph.getEdges():
             if is_new_edge[e]: color[e] = tlp.Color(200, 20, 0)
 
-    def run(self, root):
+    def run(self, root, multilevel=True, debug=False):
         static_layout_algo = "FM^3 (OGDF)"
         subgraphs = list(root.getSubGraphs())
         subgraphs.sort(key = lambda g : g.getId())
@@ -60,9 +66,12 @@ class FMMMIncremental:
             new_graph = subgraphs[-1]
             self._compute_difference(previous_graph, new_graph)
             self._merger.run(new_graph)
-            self._multilevel.run(new_graph)
+            if multilevel:
+                self._multilevel.run(new_graph)
+            else:
+                self._layout.run(new_graph, self._iterations, new_graph.getBooleanProperty("canMove"))
 
 def main(graph):
     layout = FMMMIncremental()
-    layout.run(graph)
+    layout.run(graph, False)
             

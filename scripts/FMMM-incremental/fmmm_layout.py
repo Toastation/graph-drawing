@@ -87,7 +87,7 @@ class FMMMLayout2():
         self.K_s = 1
         self.R = 0.05
         self.init_t = 200 # cst = 0.04
-        self.t_f = 0.9
+        self.t_f = 0.95
         self.max_partition_size = 20
 
     def set_init_temp(self, init_temp):
@@ -98,14 +98,18 @@ class FMMMLayout2():
 
     def _repulsive_force(self, dist_vec):
         dist_norm = dist_vec.norm()
-        if dist_norm == 0: return tlp.Vec3f()
+        if dist_norm == 0: 
+          print("dist 0")
+          return tlp.Vec3f(0.1)
         dist_norm_sq = dist_norm * dist_norm
         force = dist_vec * (self.K_r / dist_norm_sq)
         return force / dist_norm
 
     def _attractive_force(self, dist_vec):
         dist_norm = dist_vec.norm()
-        if dist_norm == 0: return tlp.Vec3f()
+        if dist_norm == 0: 
+          print("dist 0")
+          return tlp.Vec3f(0.1)
         force = dist_vec * self.K_s * (dist_norm - self.L)
         return force / dist_norm
 
@@ -139,10 +143,13 @@ class FMMMLayout2():
                     aux(node.children[1])
         aux(node)
 
-    def run(self, graph, iterations = DEFAULT_ITERATIONS, condition=None, const_temp=False):
+    def run(self, graph, iterations = DEFAULT_ITERATIONS, condition=None, const_temp=False, temp_init_factor=0.2):
+        from tulip import tlp
         layout = graph.getLayoutProperty("viewLayout")
         disp = graph.getLayoutProperty("disp")
-        t = self.init_t
+        bounding_box = tlp.computeBoundingBox(graph)
+        t = min(bounding_box.width(), bounding_box.height()) * temp_init_factor
+        print("t init {}".format(t))
         conv_threshold = 6 / graph.numberOfNodes()
         quit = False
         it = 1

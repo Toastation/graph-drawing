@@ -2,10 +2,16 @@ from tulip import tlp
 from abc import ABC, abstractmethod
 from fmmm_layout import FMMMLayout, FMMMLayout2
 import random
+######################
+from multipole_expansion import KDTree, MultipoleExpansion
+import math
+DEFAULT_ITERATIONS = 300
+REPL_CONST = 4.0
+DL = 20
 
 COARSET_ITERATIONS = 300
 FINEST_ITERATIONS = 30
-NB_NODES_THRESHOLD = 50
+NB_NODES_THRESHOLD = 2
 DESIRED_EDGE_LENGTH = 1
 LINKING_MAX_DIST = 2
 
@@ -77,7 +83,7 @@ class MIESMerger(Merger):
         pos[metanode] = metanode_pos
         can_move[metanode] = metanode_can_move
         merged_node[metanode] = True
-        #size[metanode] = tlp.Size(1, 1, 1)
+        size[metanode] = tlp.Size(1, 1, 1)
 
     ## \brief Compute a coarser represention of the graph
     # \param graph The graph from which to compute the coarser representation
@@ -145,15 +151,17 @@ class Multilevel:
         merged_node = graph.getLocalBooleanProperty("mergedNode")        
         for n in graph.getNodes():
             if merged_node[n] and graph.isMetaNode(n):
-                if can_move[n]:
-                    metanode_pos = pos[n]
-                    inner_nodes = graph.getNodeMetaInfo(n).nodes()                
-                    graph.openMetaNode(n)
-                    pos[inner_nodes[0]] = metanode_pos + tlp.Vec3f(-1)
-                    pos[inner_nodes[1]] = metanode_pos + tlp.Vec3f(1)
-                else:
-                    graph.openMetaNode(n, False)
-
+               # if can_move[n]:
+                  metanode_pos = pos[n]
+                  inner_nodes = graph.getNodeMetaInfo(n).nodes()                
+                  graph.openMetaNode(n)
+                  if can_move[inner_nodes[0]]: pos[inner_nodes[0]] = metanode_pos + tlp.Vec3f(-1)
+                  if can_move[inner_nodes[1]]: pos[inner_nodes[1]] = metanode_pos + tlp.Vec3f(1)
+                  size[inner_nodes[0]] = tlp.Size(1, 1, 1)
+                  size[inner_nodes[1]] = tlp.Size(1, 1, 1)
+                #else:
+              #      graph.openMetaNode(n, False)
+                
     def run(self, root):
         coarser_graph_series = self._compute_coarser_graph_series(root)
         if len(coarser_graph_series) == 0:
@@ -162,11 +170,17 @@ class Multilevel:
         current_level = len(coarser_graph_series) - 1
         deepest_level = current_level
         iter_range = self._coarsest_iterations - self._finest_iterations
-        self._layout.run(coarser_graph_series[-1], 300, coarser_graph_series[-1].getBooleanProperty("canMove"))
+        self._layout.run(coarser_graph_series[-1], 300, None)
         for i in range(current_level, -1, -1):
             iterations = translate(i, 0, deepest_level, self._finest_iterations, self._coarsest_iterations)
             self._interpolate_to_higher_level(coarser_graph_series[i], root)
-            self._layout.run(coarser_graph_series[i], 300, coarser_graph_series[i].getBooleanProperty("canMove"))        
+            #print("interpolation done for level {}".format(i))
+            #updateVisualization()    
+            #pauseScript()
+            self._layout.run(coarser_graph_series[i], iterations, None)
+            #print("layout done for level {}".format(i))
+            #updateVisualization()    
+            #pauseScript()
             #if i > 0: coarser_graph_series[i - 1].delSubGraph(coarser_graph_series[i])
         return True        
 
@@ -174,3 +188,104 @@ class Multilevel:
 def main(graph):
     m = Multilevel()
     m.run(graph)
+    
+#########################################################################################
+class FMMMLayout2():
+    
+    def __init__(self):
+        self._multipole_exp = MultipoleExpansion()
+        self._init_constants()
+
+    def _init_constants(self):
+        self.L = 10
+        self.K_r = 6250
+        self.K_s = 1
+        self.R = 0.05
+        self.init_t = 200 # cst = 0.04
+        self.t_f = 0.95
+        self.max_partition_size = 20
+
+    def set_init_temp(self, init_temp):
+        if init_temp < 0:
+            print("Initial temperature must be positive")
+            return
+        self.init_t = init_temp
+
+    def _repulsive_force(self, dist_vec):
+        dist_norm = dist_vec.norm()
+        if dist_norm == 0: return tlp.Vec3f()
+        dist_norm_sq = dist_norm * dist_norm
+        force = dist_vec * (self.K_r / dist_norm_sq)
+        return force / dist_norm
+
+    def _attractive_force(self, dist_vec):
+        dist_norm = dist_vec.norm()
+        if dist_norm == 0: return tlp.Vec3f()
+        force = dist_vec * self.K_s * (dist_norm - self.L)
+        return force / dist_norm
+
+    ## \brief Integral of the repulsive force
+    def repulsive_force_intgr(self, dist_vec):
+        return -(self.K_r / dist_vec.norm())
+
+    ## \brief Integral of the attractive force
+    def attractive_force_intgr(self, dist_vec):
+        dist_norm = dist_vec.norm()
+        return self.K_s * (((dist_norm * dist_norm) / 2) - (self.L * dist_norm)) 
+
+    def _compute_repulsive_forces(self, graph, vertex, node):
+        pos = graph.getLayoutProperty("viewLayout")
+        disp = graph.getLayoutProperty("disp")
+        def aux(node):
+            dist = pos[vertex] - node.center    
+            if dist.norm() > node.radius: # compute approximate repl forces
+                #print("dist norm: {}  |  radius: {}  |  vertex: {}".format(dist.norm(), node.radius, vertex))
+                disp[vertex] += node.subgraph.numberOfNodes() * self._repulsive_force(dist)
+            else:
+                if node.is_leaf: # compute exact repl forces
+                    count = 0
+                    for v in node.subgraph.getNodes():
+                        count += 1
+                        if v != vertex:
+                            d = pos[vertex] - pos[v]
+                            disp[vertex] += self._repulsive_force(d)                         
+                else:
+                    aux(node.children[0])
+                    aux(node.children[1])
+        aux(node)
+
+    def run(self, graph, iterations = DEFAULT_ITERATIONS, condition=None, const_temp=False, temp_init_factor=0.2):
+        layout = graph.getLayoutProperty("viewLayout")
+        disp = graph.getLayoutProperty("disp")
+        bounding_box = tlp.computeBoundingBox(graph)
+        t = min(bounding_box.width(), bounding_box.height()) * temp_init_factor
+        print("t init {}".format(t))
+        conv_threshold = 6 / graph.numberOfNodes()
+        quit = False
+        it = 1
+        while not quit:
+            total_disp = 0
+            if it <= 4 or it % 20 == 0: # recompute the tree for the first 4 iterations and then every 20 iterations
+                kd_tree = self._multipole_exp.build_tree(graph)                
+            for n in graph.getNodes():
+                if not condition or condition[n]: self._compute_repulsive_forces(graph, n, kd_tree)
+            for e in graph.getEdges():
+                u = graph.source(e)
+                v = graph.target(e)
+                dist = layout[u] - layout[v]
+                force = self._attractive_force(dist)
+                if not condition or condition[u]: disp[u] -= force
+                if not condition or condition[v]: disp[v] += force
+            for n in graph.getNodes():
+                disp_norm = disp[n].norm()
+                if disp_norm != 0: disp[n] = (disp[n] / disp_norm) * min(disp_norm, t)
+                else: disp[n] = tlp.Vec3f()
+                total_disp += min(disp_norm, t)
+                layout[n] += disp[n]
+                disp[n] = tlp.Vec3f()
+                #if total_disp < conv_threshold: quit = True
+            quit = it > iterations or quit # maybe infinite if conv_threshold is too low...
+            it += 1
+            if not const_temp: t *= self.t_f
+            updateVisualization()
+        print("number if iterations done: {}".format(it))
