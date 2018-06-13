@@ -79,9 +79,9 @@ class FMMMLayout2():
     
     def __init__(self):
         self._multipole_exp = MultipoleExpansion()
-        self._init_constants()
+        self.init_constants()
 
-    def _init_constants(self):
+    def init_constants(self):
         self.L = 10
         self.K_r = 6250
         self.K_s = 1
@@ -90,7 +90,7 @@ class FMMMLayout2():
         self.t_f = 0.95
         self.max_partition_size = 20
 
-    def set_init_temp(self, init_temp):
+    def set_init_temp(self, init_temp):  # TODO: use python properties/setter
         if init_temp < 0:
             print("Initial temperature must be positive")
             return
@@ -99,7 +99,6 @@ class FMMMLayout2():
     def _repulsive_force(self, dist_vec):
         dist_norm = dist_vec.norm()
         if dist_norm == 0: 
-          print("dist 0")
           return tlp.Vec3f(0.1)
         dist_norm_sq = dist_norm * dist_norm
         force = dist_vec * (self.K_r / dist_norm_sq)
@@ -108,7 +107,6 @@ class FMMMLayout2():
     def _attractive_force(self, dist_vec):
         dist_norm = dist_vec.norm()
         if dist_norm == 0: 
-          print("dist 0")
           return tlp.Vec3f(0.1)
         force = dist_vec * self.K_s * (dist_norm - self.L)
         return force / dist_norm

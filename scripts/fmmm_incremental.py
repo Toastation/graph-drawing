@@ -1,7 +1,7 @@
 from tulip import tlp
-from fmmm_multilevel import Multilevel
-from fmmm_merger import MergerFMMM
-from fmmm_layout import FMMMLayout2
+from FMMM_incremental.fmmm_multilevel import Multilevel
+from FMMM_incremental.fmmm_merger import MergerFMMM
+from FMMM_incremental.fmmm_layout import FMMMLayout2
 
 IDEAL_EDGE_LENGTH = 10
 
