@@ -36,7 +36,7 @@ def run(graph, iterations):
     t = 200 # cst = 0.04
     t_f = 0.9
     conv_threshold = 6.0 / N
-    max_partition_size = 20
+    max_partition_size = math.sqrt(N)
 
     layout = graph.getLayoutProperty("viewLayout")
     disp = graph.getLayoutProperty("disp")
@@ -83,6 +83,7 @@ def run(graph, iterations):
             else: disp[n] = tlp.Vec3f()
             total_disp += min(disp_norm, t)
             layout[n] += disp[n]
+            disp[n] = tlp.Vec3f()
             if total_disp < conv_threshold: quit = True
         quit = it > iterations or quit # maybe infinite if conv_threshold is too low...
         it += 1

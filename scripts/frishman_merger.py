@@ -52,6 +52,7 @@ class FrishmanMerger:
                     positioning_scores[n] = 0            
                     layout[n] = tlp.Vec3f(center_coord.x() + self._desired_length * math.cos(alpha), center_coord.x() + self._desired_length * math.sin(alpha))
                     alpha += dalpha
+                positioned[n] = True
         graph.delLocalProperty("positioned")
 
     ## \brief Computes a series of sets in the following manner:
@@ -61,7 +62,8 @@ class FrishmanMerger:
     # \return A list of list of tlp.node
     def _compute_distance_to_node(self, graph):
         in_set = graph.getLocalBooleanProperty("inSet") # has a node been added to a set
-        is_adjacent_to_changed = graph.getBooleanProperty("isAdjacentToChanged")
+        is_adjacent_deleted_edge = graph.getBooleanProperty("adjDeletedEdge")      
+        is_new_edge = graph.getBooleanProperty("isNewEdge")  
         pinning_weights = graph.getDoubleProperty("pinningWeight")    
         distance_to_node = [[n for n in graph.getNodes() if pinning_weights[n] < 1 or is_adjacent_to_changed[n]]] # D0
         current_set_index = 0
@@ -104,7 +106,7 @@ class FrishmanMerger:
             print("Unable to compute distance-to-node sets")
             return
         d_cutoff = round(K * len(sets) - 1)
-        for i in range(len(sets)):
+        for i in range(1, len(sets)):
             for n in sets[i]:
                 if i < d_cutoff:
                     pinning_weights[n] = self._pinning_weight_init ** (1 - (i / d_cutoff))
@@ -112,72 +114,13 @@ class FrishmanMerger:
                     pinning_weights[n] = 1
 
     ## \brief Changes the color of nodes based on their pinning weight, the higher the pinning weight, the brighter the color is (green) 
-    def __debug(graph):
+    def __debug(self, graph):
         pinning_weights = graph.getDoubleProperty("pinningWeight")
         vc = graph.getColorProperty("viewColor")
         for n in graph.getNodes():
             g = round(pinning_weights[n] * 255)
             vc[n] = tlp.Color(0, int(g), 0)        
 
-    def run(graph):
+    def run(graph, debug=False):
         self._compute_pinning_weights(graph)
-
-class MergerFMMM():
-
-    def __init__(self):
-        self._desired_length = DESIRED_LENGTH
-    
-    ## \brief Positions new nodes, and identify which nodes should move during the layout process, via the boolean property "canMove"
-    # \param graph The graph from which to position new nodes
-    def _position_nodes(self, graph):
-        is_new_node = graph.getBooleanProperty("isNewNode")
-        is_new_edge = graph.getBooleanProperty("isNewEdge")
-        positioned = graph.getBooleanProperty("positioned")
-        can_move = graph.getBooleanProperty("canMove")
-        pos = graph.getLayoutProperty("viewLayout")
-        bounding_box = tlp.computeBoundingBox(graph)
-        new_edges = (e for e in graph.getEdges() if is_new_edge[e])
-        new_nodes = []
-
-        for n in graph.getNodes():
-            if not is_new_node[n]:
-                positioned[n] = True # TODO: should be computed only on the first graph of the timeline 
-            else:
-                new_nodes.append(n)
-        
-        for n in new_nodes:
-            can_move[n] = True
-            positioned_neighbors = [neighbor for neighbor in graph.getInOutNodes(n) if positioned[neighbor]]
-            nb_positioned_neighbors = len(positioned_neighbors)
-            if nb_positioned_neighbors ==  0:
-                pos[n] = tlp.Vec3f(bounding_box[0].x() + random.random() * bounding_box.width(), bounding_box[0].y() + random.random() * bounding_box.height())
-            elif nb_positioned_neighbors == 1:
-                angle = random.random() * TAU
-                pos[n] = pos[positioned_neighbors[0]] + tlp.Vec3f(self._desired_length * math.cos(angle), self._desired_length * math.sin(angle))
-                can_move[positioned_neighbors[0]] = True
-            else:
-                sum_pos = tlp.Vec3f()
-                for neighbor in positioned_neighbors:
-                    sum_pos += pos[neighbor]
-                    can_move[neighbor] = True
-                pos[n] = sum_pos / nb_positioned_neighbors
-            positioned[n] = True
-
-        for e in new_edges:
-            can_move[graph.source(e)] = True
-            can_move[graph.target(e)] = True
-
-    def _debug(self, graph):
-        can_move = graph.getBooleanProperty("canMove")
-        color = graph.getColorProperty("viewColor")
-        for n in graph.getNodes():
-            if can_move[n]:
-                color[n] = tlp.Color(255,127,80)
-
-    def run(self, graph, debug=False):
-        self._position_nodes(graph)
-        if debug: self._debug(graph)
-
-def main(graph):
-    merger = MergerFMMM()
-    merger.run(graph, True)
+        if debug: self.__debug(graph)
