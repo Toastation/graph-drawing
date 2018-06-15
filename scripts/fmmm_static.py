@@ -1,5 +1,5 @@
-from FMMM_incremental.fmmm_multilevel import Multilevel
-from FMMM_incremental.fmmm_layout import FMMMLayout2
+from fmmm_multilevel import Multilevel
+from layout import FMMMLayout2
 
 class FMMMStatic:
     
@@ -9,7 +9,7 @@ class FMMMStatic:
         self.init_constants()
 
     def init_constants(self):
-        self._layout._init_constants()
+        self._layout.init_constants()
         self._iterations = 300
         self._condition = None
         self._const_temp = False

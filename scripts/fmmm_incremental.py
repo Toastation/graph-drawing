@@ -73,5 +73,5 @@ class FMMMIncremental:
 
 def main(graph):
     layout = FMMMIncremental()
-    layout.run(graph, False)
+    layout.run(graph, True)
             
