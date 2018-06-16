@@ -55,6 +55,16 @@ class FrishmanMerger:
                 positioned[n] = True
         graph.delLocalProperty("positioned")
 
+    def _compute_D0(self, graph):
+        is_adjacent_deleted_edge = graph.getBooleanProperty("adjDeletedEdge")      
+        is_new_edge = graph.getBooleanProperty("isNewEdge")  
+        pinning_weights = graph.getDoubleProperty("pinningWeight")
+        is_adj_to_new_edge = graph.getBooleanProperty("isAdjToNewEdge")
+        for e in is_new_edge.getEdgesEqualTo(True):
+            is_adj_to_new_edge[graph.source(e)] = True
+            is_adj_to_new_edge[graph.target(e)] = True
+        D0 = [n for n in graph.getNodes() if pinning_weights[n] < 1 or is_adjacent_deleted_edge[n] or is_adj_to_new_edge[n]]
+
     ## \brief Computes a series of sets in the following manner:
     # D_0 = the set of new nodes and nodes adjacent to a removed node
     # D_i+1 = the set of nodes adjacent to a node in D_i and not yet in a set
@@ -65,7 +75,7 @@ class FrishmanMerger:
         is_adjacent_deleted_edge = graph.getBooleanProperty("adjDeletedEdge")      
         is_new_edge = graph.getBooleanProperty("isNewEdge")  
         pinning_weights = graph.getDoubleProperty("pinningWeight")    
-        distance_to_node = [[n for n in graph.getNodes() if pinning_weights[n] < 1 or is_adjacent_to_changed[n]]] # D0
+        distance_to_node = [_compute_D0(graph)] # D0
         current_set_index = 0
         for n in distance_to_node[0]:
             in_set[n] = True

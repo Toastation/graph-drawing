@@ -175,12 +175,12 @@ class Multilevel:
             iterations = translate(i, 0, deepest_level, self._finest_iterations, self._coarsest_iterations)
             self._interpolate_to_higher_level(coarser_graph_series[i], root)
             #print("interpolation done for level {}".format(i))
-            #updateVisualization()    
-            #pauseScript()
-            self._layout.run(coarser_graph_series[i], iterations, None)
+            updateVisualization()    
+            pauseScript()
+            #self._layout.run(coarser_graph_series[i], iterations, None)
             #print("layout done for level {}".format(i))
-            #updateVisualization()    
-            #pauseScript()
+            updateVisualization()    
+            pauseScript()
             #if i > 0: coarser_graph_series[i - 1].delSubGraph(coarser_graph_series[i])
         return True        
 

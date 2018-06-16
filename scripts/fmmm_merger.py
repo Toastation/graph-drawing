@@ -6,6 +6,7 @@ DESIRED_LENGTH = 10         # desired edge length
 NEIGHBOR_INFLUENCE = 0.6    # [0, 1], a higher value will reduce the influence of the neighbors of a node on its displacement
 PINNING_WEIGHT_INIT = 0.35  # determines the decay of the pinning weight
 K = 0.5                     # determines how much a change should spread
+TAU = 2 * math.pi
 
 class MergerFMMM:
 
@@ -38,7 +39,7 @@ class MergerFMMM:
             if nb_positioned_neighbors ==  0:
                 pos[n] = tlp.Vec3f(bounding_box[0].x() + random.random() * bounding_box.width(), bounding_box[0].y() + random.random() * bounding_box.height())
             elif nb_positioned_neighbors == 1:
-                angle = random.random() * math.tau
+                angle = random.random() * TAU
                 pos[n] = pos[positioned_neighbors[0]] + tlp.Vec3f(self._desired_length * math.cos(angle), self._desired_length * math.sin(angle))
                 can_move[positioned_neighbors[0]] = True
             else:
