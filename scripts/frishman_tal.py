@@ -7,8 +7,9 @@ class FrishmanTal():
     def __init__(self):
         self._merger = FrishmanMerger()
         self._layout = FrishmanLayout()
+        self.init_constants()
 
-    def init_constants(self, graph):
+    def init_constants(self):
         self._iterations = 300
         self._const_temp = False
         self._temp_init_factor = 0.2
@@ -38,7 +39,7 @@ class FrishmanTal():
                 if target in new_graph.getNodes(): 
                     adjacent_deleted_edge[target] = True
 
-    def run(self, graph, multilevel=True, debug=False):
+    def run(self, root, multilevel=True, debug=False):
         subgraphs = list(root.getSubGraphs())
         subgraphs.sort(key = lambda g : g.getId())
         if len(subgraphs) == 0:

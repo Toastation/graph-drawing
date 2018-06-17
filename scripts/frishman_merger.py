@@ -6,7 +6,7 @@ DESIRED_LENGTH = 10         # desired edge length
 NEIGHBOR_INFLUENCE = 0.6    # [0, 1], a higher value will reduce the influence of the neighbors of a node on its displacement
 PINNING_WEIGHT_INIT = 0.35  # determines the decay of the pinning weight
 K = 0.5                     # determines how much a change should spread
-TAU = 2 * math.pi
+TAU = 2 * math.pi           # python 2.7 doesn't have this constant
 
 class FrishmanMerger:
 
@@ -68,6 +68,7 @@ class FrishmanMerger:
             pinning_weights[source] = 0
             pinning_weights[target] = 0
         D0 = [n for n in graph.getNodes() if pinning_weights[n] < 1 or is_adjacent_deleted_edge[n] or is_adj_to_new_edge[n]]
+        return D0
 
     ## \brief Computes a series of sets in the following manner:
     # D_0 = the set of new nodes and nodes adjacent to a removed node
@@ -79,7 +80,7 @@ class FrishmanMerger:
         is_adjacent_deleted_edge = graph.getBooleanProperty("adjDeletedEdge")      
         is_new_edge = graph.getBooleanProperty("isNewEdge")  
         pinning_weights = graph.getDoubleProperty("pinningWeight")    
-        distance_to_node = [_compute_D0(graph)] # D0
+        distance_to_node = [self._compute_D0(graph)] # D0
         current_set_index = 0
         for n in distance_to_node[0]:
             in_set[n] = True
@@ -112,7 +113,7 @@ class FrishmanMerger:
             neighbor_sum = 0
             for neighbor in graph.getInOutNodes(n):
                 neighbor_sum += positioning_scores[neighbor]
-            pinning_weights[n] = _neighbor_influence * positioning_scores[n] + neighbor_influence_complement * (1.0 / graph.deg(n)) * neighbor_sum
+            pinning_weights[n] = self._neighbor_influence * positioning_scores[n] + neighbor_influence_complement * (1.0 / graph.deg(n)) * neighbor_sum
         # global pass
         sets = self._compute_distance_to_node(graph)
         print(len(sets))
@@ -135,6 +136,6 @@ class FrishmanMerger:
             g = round(pinning_weights[n] * 255)
             vc[n] = tlp.Color(0, int(g), 0)        
 
-    def run(graph, debug=False):
+    def run(self, graph, debug=True):
         self._compute_pinning_weights(graph)
         if debug: self.__debug(graph)
