@@ -61,8 +61,12 @@ class FrishmanMerger:
         pinning_weights = graph.getDoubleProperty("pinningWeight")
         is_adj_to_new_edge = graph.getBooleanProperty("isAdjToNewEdge")
         for e in is_new_edge.getEdgesEqualTo(True):
+            source = graph.source(e)
+            target = graph.target(e)
             is_adj_to_new_edge[graph.source(e)] = True
             is_adj_to_new_edge[graph.target(e)] = True
+            pinning_weights[source] = 0
+            pinning_weights[target] = 0
         D0 = [n for n in graph.getNodes() if pinning_weights[n] < 1 or is_adjacent_deleted_edge[n] or is_adj_to_new_edge[n]]
 
     ## \brief Computes a series of sets in the following manner:
