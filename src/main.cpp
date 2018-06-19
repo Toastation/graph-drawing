@@ -2,7 +2,6 @@
 #include <tulip/TlpTools.h>
 #include <tulip/Graph.h>
 #include <tulip/ForEach.h>
-#include <tulip/BooleanProperty.h>
 
 
 int main() {

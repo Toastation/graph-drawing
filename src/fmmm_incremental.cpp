@@ -110,7 +110,7 @@ bool FMMMIncremental::positionNodes(tlp::Graph *g) {
             positioned->setNodeValue(n, true);
     }
 
-    std::vector<tlp::node&> positionedNeighbors;
+    std::vector<tlp::node> positionedNeighbors;
     tlp::node n2;
     forEach(n, isNewNode->getNodesEqualTo(true)) {
         canMove->setNodeValue(n, true);
