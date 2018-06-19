@@ -88,7 +88,7 @@ bool FMMMIncremental::computeDifference(tlp::Graph *oldGraph, tlp::Graph *newGra
     return true;    
 }
 
-bool positionNodes(tlp::Graph *g) {
+bool FMMMIncremental::positionNodes(tlp::Graph *g) {
     tlp::BooleanProperty *isNewNode = g->getProperty<tlp::BooleanProperty>("isNewNode");
     tlp::BooleanProperty *isNewEdge = g->getProperty<tlp::BooleanProperty>("isNewEdge");
     tlp::BooleanProperty *adjacentToDeletedEdge = g->getProperty<tlp::BooleanProperty>("adjDeletedEdge");
@@ -123,11 +123,20 @@ bool positionNodes(tlp::Graph *g) {
         unsigned int nbPositionedNeighbors = positionedNeighbors.size();
 
         if (nbPositionedNeighbors == 0) {
-            //TODO
+            pos->setNodeValue(n, tlp::Vec3f(std::rand() % int(bb.width()), std::rand() % int(bb.height())));
         } else if (nbPositionedNeighbors == 1) {
-            //TODO
+            float randomAngle = (float(std::rand()) / float(RAND_MAX)) * float(TAU);
+            pos->setNodeValue(n, pos->getNodeValue(positionedNeighbors[0]) + tlp::Vec3f(m_idealEdgeLength * std::cos(randomAngle), m_idealEdgeLength * std::sin(randomAngle)));
+            canMove->setNodeValue(positionedNeighbors[0], true);
         } else {
-            //TODO
+            tlp::Vec3f sumPos;
+            for (auto nodeIt = positionedNeighbors.begin(); nodeIt != positionedNeighbors.end(); nodeIt++) {
+                sumPos += pos->getNodeValue(*nodeIt);
+                canMove->setNodeValue(*nodeIt, true);
+            }
+            sumPos.setX(sumPos.x() / nbPositionedNeighbors);
+            sumPos.setY(sumPos.y() / nbPositionedNeighbors);
+            pos->setNodeValue(n, sumPos);
         }
 
         positioned->setNodeValue(n, true);
