@@ -3,7 +3,7 @@
 
 #include <string>
 #include <tulip/Graph.h>
-#include<tulip/TulipPluginHeaders.h>
+#include <tulip/TulipPluginHeaders.h>
 
 class FMMMIncremental : public tlp::Algorithm {
 public:

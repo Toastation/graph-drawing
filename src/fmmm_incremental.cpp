@@ -1,11 +1,24 @@
+#define _USE_MATH_DEFINES
+
 #include <fmmm_incremental.h>
 #include <util.h>
 
 #include <tulip/ForEach.h>
+#include <tulip/BooleanProperty.h>
+#include <tulip/LayoutProperty.h>
+#include <tulip/DoubleProperty.h>
+#include <tulip/SizeProperty.h>
+#include <tulip/BoundingBox.h>
+#include <tulip/DrawingTools.h>
 
 #include <algorithm>
 #include <vector>
 #include <iterator>
+#include <math.h>
+#include <cstdlib>
+#include <ctime>
+
+#define TAU 2*M_PI
 
 bool FMMMIncremental::check(std::string &errorMessage) {
     return true;
@@ -73,6 +86,54 @@ bool FMMMIncremental::computeDifference(tlp::Graph *oldGraph, tlp::Graph *newGra
         }
     }
     return true;    
+}
+
+bool positionNodes(tlp::Graph *g) {
+    tlp::BooleanProperty *isNewNode = g->getProperty<tlp::BooleanProperty>("isNewNode");
+    tlp::BooleanProperty *isNewEdge = g->getProperty<tlp::BooleanProperty>("isNewEdge");
+    tlp::BooleanProperty *adjacentToDeletedEdge = g->getProperty<tlp::BooleanProperty>("adjDeletedEdge");
+    tlp::BooleanProperty *canMove = g->getProperty<tlp::BooleanProperty>("canMove");
+    tlp::BooleanProperty *positioned = g->getProperty<tlp::BooleanProperty>("positioned");
+    tlp::LayoutProperty *pos = g->getProperty<tlp::LayoutProperty>("viewLayout");
+    tlp::DoubleProperty *rot = g->getProperty<tlp::DoubleProperty>("viewRotation");
+    tlp::SizeProperty *size = g->getProperty<tlp::SizeProperty>("viewSize");
+    canMove->setAllNodeValue(false);
+    positioned->setAllNodeValue(false);
+    tlp::BoundingBox bb = tlp::computeBoundingBox(g, pos, size, rot);
+    std::srand(std::time(nullptr));
+
+    tlp::node n;
+    forEach(n, g->getNodes()) {
+        if (adjacentToDeletedEdge->getNodeValue(n))
+            canMove->setNodeValue(n, true);
+        if (!isNewNode->getNodeValue(n))
+            positioned->setNodeValue(n, true);
+    }
+
+    std::vector<tlp::node&> positionedNeighbors;
+    tlp::node n2;
+    forEach(n, isNewNode->getNodesEqualTo(true)) {
+        canMove->setNodeValue(n, true);
+        
+        positionedNeighbors.clear();
+        forEach(n2, g->getInOutNodes(n)) {
+            if (positioned->getNodeValue(n2))
+                positionedNeighbors.push_back(n2);
+        }
+        unsigned int nbPositionedNeighbors = positionedNeighbors.size();
+
+        if (nbPositionedNeighbors == 0) {
+            //TODO
+        } else if (nbPositionedNeighbors == 1) {
+            //TODO
+        } else {
+            //TODO
+        }
+
+        positioned->setNodeValue(n, true);
+    }
+
+    return true;
 }
 
 #ifndef FMMMINCREMENTAL_REGISTERED

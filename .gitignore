@@ -5,3 +5,4 @@ __pycache__/
 profiling/
 bin/
 dependencies/
+.vscode/
