@@ -36,7 +36,7 @@ bool FMMMIncremental::run() {
 
     int nb_subgraphs = graph->numberOfSubGraphs();
     if (nb_subgraphs == 0) {
-        tlp::Graph *timeline0 = graph->addCloneSubGraph("timeline_0");
+        //tlp::Graph *timeline0 = graph->addCloneSubGraph("timeline_0");
         // run static layout algo
     } else if (nb_subgraphs == 1) {
         // run static layout algo
@@ -90,7 +90,6 @@ bool FMMMIncremental::computeDifference(tlp::Graph *oldGraph, tlp::Graph *newGra
 
 bool FMMMIncremental::positionNodes(tlp::Graph *g) {
     tlp::BooleanProperty *isNewNode = g->getProperty<tlp::BooleanProperty>("isNewNode");
-    tlp::BooleanProperty *isNewEdge = g->getProperty<tlp::BooleanProperty>("isNewEdge");
     tlp::BooleanProperty *adjacentToDeletedEdge = g->getProperty<tlp::BooleanProperty>("adjDeletedEdge");
     tlp::BooleanProperty *canMove = g->getProperty<tlp::BooleanProperty>("canMove");
     tlp::BooleanProperty *positioned = g->getProperty<tlp::BooleanProperty>("positioned");
