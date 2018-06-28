@@ -18,3 +18,12 @@ int main() {
 
     return EXIT_SUCCESS;
 }
+
+// #include <iostream>
+// #include <ogdf/basic/NodeArray.h>
+
+// int main() {
+//     ogdf::NodeArray<bool> nodeArray();
+
+//     return EXIT_SUCCESS;
+// }

@@ -80,6 +80,7 @@ class FMMMLayout2():
     def __init__(self):
         self._multipole_exp = MultipoleExpansion()
         self.init_constants()
+        self._result = "viewLayout" 
 
     def init_constants(self):
         self.L = 10
@@ -141,7 +142,11 @@ class FMMMLayout2():
                     aux(node.children[1])
         aux(node)
 
+    def set_result(self, result):
+        self._result = result
+
     def run(self, graph, iterations = DEFAULT_ITERATIONS, condition=None, const_temp=False, temp_init_factor=0.2):
+        print(self._result)
         layout = graph.getLayoutProperty("viewLayout")
         disp = graph.getLayoutProperty("disp")
         bounding_box = tlp.computeBoundingBox(graph)
@@ -243,9 +248,16 @@ class FrishmanLayout():
                     aux(node.children[1])
         aux(node)
 
+    def set_result(self, result):
+        self._result = result
+
     def run(self, graph, iterations = DEFAULT_ITERATIONS, condition=None, const_temp=False, temp_init_factor=0.2):
+        if not graph.existProperty(self._result):
+            layout = graph.getLayoutProperty(self._result)
+            layout.copy(graph.getLayoutProperty("viewLayout"))
+        else:
+            layout = graph.getLayoutProperty(self._result)
         disp = graph.getLayoutProperty("disp")
-        layout = graph.getLayoutProperty("viewLayout")
         pinning_weights = graph.getDoubleProperty("pinningWeight")
         bounding_box = tlp.computeBoundingBox(graph)
         t = min(bounding_box.width(), bounding_box.height()) * temp_init_factor

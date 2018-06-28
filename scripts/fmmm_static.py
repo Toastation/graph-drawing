@@ -6,6 +6,7 @@ class FMMMStatic:
     def __init__(self):
         self._multilevel = Multilevel()
         self._layout = FMMMLayout2()
+        self._layout.set_result("result")
         self.init_constants()
 
     def init_constants(self):

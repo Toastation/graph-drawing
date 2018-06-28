@@ -3,8 +3,45 @@ from fmmm_multilevel import Multilevel
 from fmmm_merger import MergerFMMM
 from layout import FMMMLayout2
 from fmmm_static import FMMMStatic
+import random
 
 IDEAL_EDGE_LENGTH = 10
+
+
+def lerp(a, b, t):
+    return a * (1.0 - t) + b * t
+
+def morph(graph, result="result", layout="viewLayout", previous="previousPos", steps=500):
+    is_new_node = graph.getBooleanProperty("isNewNode")
+    is_new_edge = graph.getBooleanProperty("isNewEdge")
+    color = graph.getColorProperty("viewColor")
+    result = graph.getLayoutProperty(result)
+    pos = graph.getLayoutProperty(layout)
+    previous_pos = graph.getLayoutProperty(previous)
+
+    for n in is_new_node.getNodesEqualTo(True):
+        pos[n] = result[n]
+        color[n].setA(0)
+    for e in is_new_edge.getEdgesEqualTo(True):
+        color[e].setA(0)            
+
+    for i in range(1, steps + 1):
+        t = i / steps
+
+        for n in graph.getNodes():
+            if is_new_node[n]:
+                alpha = lerp(0, 255, t)
+                c = color[n]
+                color[n] = tlp.Color(c.getR(), c.getG(), c.getB(), int(alpha))
+            else:
+                pos[n] = lerp(previous_pos[n], result[n], t)
+        for e in graph.getEdges():
+            if is_new_edge[e]:
+                alpha = lerp(0, 255, t)
+                c = color[e]
+                color[e] = tlp.Color(c.getR(), c.getG(), c.getB(), int(alpha))
+        updateVisualization(True)
+
 
 class FMMMIncremental:
     
@@ -14,6 +51,7 @@ class FMMMIncremental:
         self._multilevel = Multilevel()
         self._layout = FMMMLayout2()
         self._static = FMMMStatic()
+        self._layout.set_result("result")
         self.init_constants()
 
     def init_constants(self):
@@ -43,6 +81,7 @@ class FMMMIncremental:
                     adjacent_deleted_edge[source] = True                                                
                 if target in new_graph.getNodes(): 
                     adjacent_deleted_edge[target] = True
+        self._debug(new_graph)
 
     def _debug(self, graph):
         color = graph.getColorProperty("viewColor")
@@ -59,18 +98,53 @@ class FMMMIncremental:
         subgraphs.sort(key = lambda g : g.getId())
         if len(subgraphs) == 0:
             sg = root.addCloneSubGraph("timeline_0")
+            previous_pos = sg.getLayoutProperty("previousPos")
+            previous_pos.copy(sg.getLayoutProperty("viewLayout"))
             self._static.run(sg, multilevel)
+            result = sg.getLayoutProperty("result")
+            layout = sg.getLayoutProperty("viewLayout")
+            result.copy(layout)
+            layout.copy(previous_pos)
+            morph(sg)
+            # ds = tlp.getDefaultPluginParameters("GEM (Frick)", sg)
+            # sg.applyLayoutAlgorithm("GEM (Frick)", ds)
         elif len(subgraphs) == 1:
+            # ds = tlp.getDefaultPluginParameters("GEM (Frick)", subgraphs[0])
+            # subgraphs[0].applyLayoutAlgorithm("GEM (Frick)", ds)
+            previous_pos = subgraphs[0].getLayoutProperty("previousPos")
+            previous_pos.copy(subgraphs[0].getLayoutProperty("viewLayout"))
             self._static.run(subgraphs[0], multilevel)
+            result = subgraphs[0].getLayoutProperty("result")
+            layout = subgraphs[0].getLayoutProperty("viewLayout")
+            result.copy(layout)
+            layout.copy(previous_pos)
+            morph(subgraphs[0])
         else:
             previous_graph = subgraphs[-2]
             new_graph = subgraphs[-1]
+            previous_pos = new_graph.getLayoutProperty("previousPos")
+            previous_pos.copy(new_graph.getLayoutProperty("viewLayout"))
             self._compute_difference(previous_graph, new_graph)
             self._merger.run(new_graph)
+            updateVisualization()
+            pauseScript()
             if multilevel:
                 self._multilevel.run(new_graph)
             else:
+                # ds = tlp.getDefaultPluginParameters("GEM (Frick)", new_graph)
+                # ds["initial layout"] = new_graph.getLayoutProperty("viewLayout")
+                # canMove = new_graph.getBooleanProperty("canMove")
+                # canMoveCompl = new_graph.getBooleanProperty("canMoveCompl")
+                # for n in graph.getNodes():
+                #     canMoveCompl[n] = not canMove[n]
+                # ds["unmovables nodes"] = canMoveCompl
+                # subgraphs[0].applyLayoutAlgorithm("GEM (Frick)", ds)
                 self._layout.run(new_graph, self._iterations, new_graph.getBooleanProperty("canMove"))
+            result = new_graph.getLayoutProperty("result")
+            layout = new_graph.getLayoutProperty("viewLayout")
+            result.copy(layout)
+            layout.copy(previous_pos)
+            morph(new_graph)            
 
 def main(graph):
     layout = FMMMIncremental()

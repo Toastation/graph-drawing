@@ -34,6 +34,7 @@ bool FMMMIncremental::run() {
     
     // we should check the order of the subgraphs, right now it's the responsability of the user
 
+
     int nb_subgraphs = graph->numberOfSubGraphs();
     if (nb_subgraphs == 0) {
         //tlp::Graph *timeline0 = graph->addCloneSubGraph("timeline_0");
@@ -98,6 +99,7 @@ bool FMMMIncremental::positionNodes(tlp::Graph *g) {
     tlp::SizeProperty *size = g->getProperty<tlp::SizeProperty>("viewSize");
     canMove->setAllNodeValue(false);
     positioned->setAllNodeValue(false);
+
     tlp::BoundingBox bb = tlp::computeBoundingBox(g, pos, size, rot);
     std::srand(std::time(nullptr));
 

@@ -20,9 +20,9 @@
 #include <tulip/ForEach.h>
 #include <tulip/StringCollection.h>
 
-#include <tulip/OGDFLayoutPluginBase.h>
+#include <tulip2ogdf/OGDFLayoutPluginBase.h>
 #include <ogdf/energybased/FMMMLayout.h>
-#include 
+//#include <fmmm_layout.h>
 
 using namespace std;
 
@@ -261,14 +261,14 @@ static const char *smallestCellFindingValuesDescription =
     "Iteratively <i>(Iteratively, in constant time)</i><br>"
     "Aluru <i>(According to formula by Aluru et al., in constant time)</i>";
 
-class OGDFFm3: public OGDFLayoutPluginBase {
+class OGDFFm3Custom: public OGDFLayoutPluginBase {
 
     tlp::StringCollection stringCollection;
 
 public:
     PLUGININFORMATION("FM^3 (OGDF) custom", "Stephan Hachul", "09/11/2007", "Implements the FM³ layout algorithm by Hachul and Jünger. It is a multilevel, force-directed layout algorithm that can be applied to very large graphs. Modified in order to be implemented in an incremental algo.", "1.2" ,"Force Directed")
-    OGDFFm3(const tlp::PluginContext* context);
-    ~OGDFFm3();
+    OGDFFm3Custom(const tlp::PluginContext* context);
+    ~OGDFFm3Custom();
     void beforeCall();
     void callOGDFLayoutAlgorithm(ogdf::GraphAttributes &gAttributes);
 };
@@ -276,9 +276,9 @@ public:
 
 /*Nom de la classe, Nom du plugins, nom de l'auteur,date de
  creation,information, release, groupe*/
-PLUGIN(OGDFFm3)
+PLUGIN(OGDFFm3Custom)
 
-OGDFFm3::OGDFFm3(const tlp::PluginContext* context) :
+OGDFFm3Custom::OGDFFm3Custom(const tlp::PluginContext* context) :
     OGDFLayoutPluginBase(context, new ogdf::FMMMLayout()) {
     addInParameter<NumericProperty*> ("Edge Length Property", paramHelp[0], "viewMetric", false);
     addInParameter<SizeProperty> ("Node Size", paramHelp[1], "viewSize", false);
@@ -302,10 +302,10 @@ OGDFFm3::OGDFFm3(const tlp::PluginContext* context) :
     addInParameter<StringCollection> (ELT_SMALLESTCELLFINDING, paramHelp[19], ELT_SMALLESTCELLFINDINGLIST, true, smallestCellFindingValuesDescription);
 }
 
-OGDFFm3::~OGDFFm3() {
+OGDFFm3Custom::~OGDFFm3Custom() {
 }
 
-void OGDFFm3::beforeCall() {
+void OGDFFm3Custom::beforeCall() {
     ogdf::FMMMLayout *fmmm = static_cast<ogdf::FMMMLayout*> (ogdfLayoutAlgo);
 
     if (dataSet != 0) {
@@ -503,34 +503,41 @@ void OGDFFm3::beforeCall() {
 }
 
 
-void OGDFFm3::callOGDFLayoutAlgorithm(ogdf::GraphAttributes &gAttributes) {
+void OGDFFm3Custom::callOGDFLayoutAlgorithm(ogdf::GraphAttributes &gAttributes) {
     ogdf::FMMMLayout *fmmm = static_cast<ogdf::FMMMLayout*> (ogdfLayoutAlgo);
     NumericProperty *length = NULL;
 
     // converts canMove bool property to NodeArray<bool>
-
+    tlp::BooleanProperty *canMove = graph->getProperty<tlp::BooleanProperty>("canMove");
     ogdf::Graph &graphOGDF = tlpToOGDF->getOGDFGraph();
-    ogdf::NodeArray nodeArray(graphOGDF);
+    ogdf::NodeArray<bool> nodeArray(graphOGDF);
     const std::vector<tlp::node> &nodes = graph->nodes();
     for (int i = 0; i < nodes.size(); i++) {
-
+        nodeArray[tlpToOGDF->getOGDFGraphNode(i)] = canMove->getNodeValue(nodes[i]);
     }
-
+    std::cout << "0" << std::endl;
     //------------
-    if (dataSet->get("Edge Length Property", length) && length) {
+    if (dataSet != 0 && dataSet->get("Edge Length Property", length) && length) {
+        std::cout << "0.1" << std::endl;
+
         EdgeArray<double> edgeLength(tlpToOGDF->getOGDFGraph());
         const std::vector<tlp::edge>& edges = graph->edges();
         unsigned int nbEdges = edges.size();
+        std::cout << "0.2" << std::endl;
 
         for(unsigned int i = 0; i < nbEdges; ++i) {
             edgeLength[tlpToOGDF->getOGDFGraphEdge(i)] =
                 length->getEdgeDoubleValue(edges[i]);
         }
 
+        std::cout << "1" << std::endl;
         fmmm->call(gAttributes, edgeLength);
+        std::cout << "2" << std::endl;
     }
     else {
+        std::cout << "3" << std::endl;
         OGDFLayoutPluginBase::callOGDFLayoutAlgorithm(gAttributes);
+        std::cout << "4" << std::endl;
     }
 }
 

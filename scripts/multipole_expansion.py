@@ -76,7 +76,7 @@ class MultipoleExpansion:
         if graph.numberOfNodes() <= self._vertices_threshold: return root
         self._compute_coef(pos, root)
         self._build_children(pos, root, 0)
-        self.debug(graph, root)
+        #self.debug(graph, root)
         return root
 
     def debug(self, graph, tree):

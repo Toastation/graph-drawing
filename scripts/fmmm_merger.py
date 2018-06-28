@@ -25,6 +25,7 @@ class MergerFMMM:
         bounding_box = tlp.computeBoundingBox(graph)
         new_edges = (e for e in graph.getEdges() if is_new_edge[e])
         new_nodes = []
+
         for n in graph.getNodes():
             if adjacent_deleted_edge[n]:
                 can_move[n] = True
@@ -32,23 +33,48 @@ class MergerFMMM:
                 positioned[n] = True # TODO: should be computed only on the first graph of the timeline 
             else:
                 new_nodes.append(n)
-        for n in new_nodes:
-            can_move[n] = True
-            positioned_neighbors = [neighbor for neighbor in graph.getInOutNodes(n) if positioned[neighbor]]
-            nb_positioned_neighbors = len(positioned_neighbors)
-            if nb_positioned_neighbors ==  0:
-                pos[n] = tlp.Vec3f(bounding_box[0].x() + random.random() * bounding_box.width(), bounding_box[0].y() + random.random() * bounding_box.height())
-            elif nb_positioned_neighbors == 1:
-                angle = random.random() * TAU
-                pos[n] = pos[positioned_neighbors[0]] + tlp.Vec3f(self._desired_length * math.cos(angle), self._desired_length * math.sin(angle))
-                can_move[positioned_neighbors[0]] = True
-            else:
-                sum_pos = tlp.Vec3f()
-                for neighbor in positioned_neighbors:
-                    sum_pos += pos[neighbor]
-                    can_move[neighbor] = True
-                pos[n] = sum_pos / nb_positioned_neighbors
-            positioned[n] = True
+        
+        # position new nodes
+        new_nodes_sg = graph.inducedSubGraph(new_nodes)
+        connected_components = tlp.ConnectedTest.computeConnectedComponents(new_nodes_sg)
+        for cc in connected_components:
+            if len(cc) == 0: return
+            cc_sg = new_nodes_sg.inducedSubGraph(cc)
+
+            # find the node with the most positioned neighbors in the connected component, and position the new nodes in a bfs-way from this node
+            max_positioned_neighbors = -1
+            max_positioned_neighbors_node = cc[0]
+            for n in cc:
+                positioned_neighbors = [neighbor for neighbor in graph.getInOutNodes(n) if positioned[neighbor]]
+                if len(positioned_neighbors) > max_positioned_neighbors:
+                    max_positioned_neighbors_node = n
+                    max_positioned_neighbors = len(positioned_neighbors)
+
+            print("max nb positioned neigh {} {}".format(max_positioned_neighbors_node, max_positioned_neighbors))
+            
+            for n in cc_sg.bfs(max_positioned_neighbors_node):
+                can_move[n] = True
+                positioned_neighbors = [neighbor for neighbor in graph.getInOutNodes(n) if positioned[neighbor]]
+                nb_positioned_neighbors = len(positioned_neighbors)
+                if nb_positioned_neighbors ==  0:
+                    print("{} 0".format(n))
+                    pos[n] = tlp.Vec3f(bounding_box[0].x() + random.random() * bounding_box.width(), bounding_box[0].y() + random.random() * bounding_box.height())
+                elif nb_positioned_neighbors == 1:
+                    print("{} 1".format(n))
+                    angle = random.random() * TAU
+                    pos[n] = pos[positioned_neighbors[0]] + tlp.Vec3f(self._desired_length * math.cos(angle), self._desired_length * math.sin(angle))
+                    can_move[positioned_neighbors[0]] = True
+                else:
+                    print("{} 2".format(n))
+                    sum_pos = tlp.Vec3f()
+                    for neighbor in positioned_neighbors:
+                        sum_pos += pos[neighbor]
+                        can_move[neighbor] = True
+                    pos[n] = sum_pos / nb_positioned_neighbors
+                positioned[n] = True
+
+            new_nodes_sg.delSubGraph(cc_sg)
+        
         for e in new_edges:
             can_move[graph.source(e)] = True
             can_move[graph.target(e)] = True
