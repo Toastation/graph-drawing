@@ -57,15 +57,12 @@ class MergerFMMM:
                 positioned_neighbors = [neighbor for neighbor in graph.getInOutNodes(n) if positioned[neighbor]]
                 nb_positioned_neighbors = len(positioned_neighbors)
                 if nb_positioned_neighbors ==  0:
-                    print("{} 0".format(n))
                     pos[n] = tlp.Vec3f(bounding_box[0].x() + random.random() * bounding_box.width(), bounding_box[0].y() + random.random() * bounding_box.height())
                 elif nb_positioned_neighbors == 1:
-                    print("{} 1".format(n))
                     angle = random.random() * TAU
                     pos[n] = pos[positioned_neighbors[0]] + tlp.Vec3f(self._desired_length * math.cos(angle), self._desired_length * math.sin(angle))
                     can_move[positioned_neighbors[0]] = True
                 else:
-                    print("{} 2".format(n))
                     sum_pos = tlp.Vec3f()
                     for neighbor in positioned_neighbors:
                         sum_pos += pos[neighbor]

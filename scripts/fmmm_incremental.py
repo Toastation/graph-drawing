@@ -1,3 +1,12 @@
+# see README.md
+# How to use:
+#    Graph hierarchy: 
+#        This script should only be called on the root graph. The root graph must contain all the nodes/edges of every graph of the timeline.
+#        The subgraphs of the root graph correspond to the differents steps of the timeline. They must be ordered by their id.
+#
+#    /!\ Currently this script only works for online graph drawing, i.e when the script is called, it will compute the layout from the latest graph in the timeline
+#    based on the previous one.
+
 from tulip import tlp
 from fmmm_multilevel import Multilevel
 from fmmm_merger import MergerFMMM
@@ -7,18 +16,17 @@ import random
 
 IDEAL_EDGE_LENGTH = 10
 
-
 def lerp(a, b, t):
     return a * (1.0 - t) + b * t
 
-def morph(graph, result="result", layout="viewLayout", previous="previousPos", steps=500):
+def morph(graph, steps=500):
     is_new_node = graph.getBooleanProperty("isNewNode")
     is_new_edge = graph.getBooleanProperty("isNewEdge")
     color = graph.getColorProperty("viewColor")
-    result = graph.getLayoutProperty(result)
-    pos = graph.getLayoutProperty(layout)
-    previous_pos = graph.getLayoutProperty(previous)
-
+    result = graph.getLayoutProperty("result")
+    pos = graph.getLayoutProperty("viewLayout")
+    previous_pos = graph.getLayoutProperty("previousPos")
+    
     for n in is_new_node.getNodesEqualTo(True):
         pos[n] = result[n]
         color[n].setA(0)
@@ -26,7 +34,7 @@ def morph(graph, result="result", layout="viewLayout", previous="previousPos", s
         color[e].setA(0)            
 
     for i in range(1, steps + 1):
-        t = i / steps
+        t = 1.0 * i / steps # "/" operator is the integer division in python 2.7, hence the float constant
 
         for n in graph.getNodes():
             if is_new_node[n]:
@@ -41,7 +49,6 @@ def morph(graph, result="result", layout="viewLayout", previous="previousPos", s
                 c = color[e]
                 color[e] = tlp.Color(c.getR(), c.getG(), c.getB(), int(alpha))
         updateVisualization(True)
-
 
 class FMMMIncremental:
     
@@ -126,8 +133,6 @@ class FMMMIncremental:
             previous_pos.copy(new_graph.getLayoutProperty("viewLayout"))
             self._compute_difference(previous_graph, new_graph)
             self._merger.run(new_graph)
-            updateVisualization()
-            pauseScript()
             if multilevel:
                 self._multilevel.run(new_graph)
             else:
