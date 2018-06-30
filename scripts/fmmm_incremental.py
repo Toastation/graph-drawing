@@ -34,7 +34,7 @@ def morph(graph, steps=500):
         color[e].setA(0)            
 
     for i in range(1, steps + 1):
-        t = 1.0 * i / steps # "/" operator is the integer division in python 2.7, hence the float constant
+        t = 1.0 * i / steps # "/" operator <=> integer division in python 2.7, hence the float constant
 
         for n in graph.getNodes():
             if is_new_node[n]:

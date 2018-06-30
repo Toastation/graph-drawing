@@ -22,4 +22,4 @@ private:
 	float m_initTemp;
 	float m_coolingFactor;
 	float m_maxPartitionSize;
-}
+};
