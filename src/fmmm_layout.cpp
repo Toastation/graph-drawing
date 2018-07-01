@@ -3,6 +3,10 @@
 #include <tulip/DrawingTools.h>
 #include <tulip/ForEach.h>
 #include <tulip/DataSet.h>
+#include <tulip/LayoutProperty.h>
+#include <tulip/DoubleProperty.h>	
+#include <tulip/SizeProperty.h>
+#include <tulip/BooleanProperty.h>	
 
 #include <cstdlib>
 #include <cmath>
@@ -26,18 +30,30 @@ FMMMLayoutCustom::FMMMLayoutCustom(const tlp::PluginContext *context)
 	: LayoutAlgorithm(context), m_cstTemp(DEFAUT_CST_TEMP), m_cstInitTemp(DEFAUT_CST_INIT_TEMP), m_L(DEFAULT_L), m_Kr(DEFAULT_KR), m_Ks(DEFAULT_KS),
 	  m_initTemp(DEFAULT_INIT_TEMP), m_initTempFactor(DEFAULT_INIT_TEMP_FACTOR), m_coolingFactor(DEFAULT_COOLING_FACTOR), m_iterations(DEFAUT_ITERATIONS), 
 	  m_maxPartitionSize(DEFAULT_MAX_PARTITION_SIZE) {
-	m_pos = graph->getLocalProperty<tlp::LayoutProperty>("viewLayout");
-	m_disp = graph->getLocalProperty<tlp::LayoutProperty>("disp");
-	m_size = graph->getLocalProperty<tlp::SizeProperty>("viewSize");
-	m_rot = graph->getLocalProperty<tlp::DoubleProperty>("viewRotation");
+	addInParameter<tlp::BooleanProperty>("movable nodes", "Set of nodes allowed to move. If nothing is given, all nodes are allowed to move.", "", false);
 }
 
 FMMMLayoutCustom::~FMMMLayoutCustom() {
 
 }
 
+bool FMMMLayoutCustom::check(std::string &errorMessage) {
+	m_condition = false;
+
+	if (dataSet != nullptr)
+		m_condition = dataSet->get("movable nodes", m_canMove);
+
+	result->copy(graph->getProperty<tlp::LayoutProperty>("viewLayout"));
+	m_disp = graph->getLocalProperty<tlp::LayoutProperty>("disp");
+	m_size = graph->getLocalProperty<tlp::SizeProperty>("viewSize");
+	m_rot = graph->getLocalProperty<tlp::DoubleProperty>("viewRotation");
+	return true;
+}
+
+
 bool FMMMLayoutCustom::run() {
-	tlp::BoundingBox bb = tlp::computeBoundingBox(graph, m_pos, m_size, m_rot);
+	std::cout << "running..." << std::endl;
+	tlp::BoundingBox bb = tlp::computeBoundingBox(graph, result, m_size, m_rot);
 	float t = m_cstInitTemp ? m_initTemp : std::min(bb.width(), bb.height()) * m_initTempFactor;
 
 	std::cout << "Init temp: " << t << std::endl;
@@ -58,18 +74,18 @@ bool FMMMLayoutCustom::run() {
 		}
 
 		forEach (n, graph->getNodes()) {
-			if (m_canMove->getNodeValue(n))
+			if (!m_condition || m_canMove->getNodeValue(n))
 				compute_repl_forces(n, graph);
 		}
 
 		forEach (e, graph->getEdges()) {
 			u = graph->source(e);
 			v = graph->target(e);
-			dist = m_pos->getNodeValue(u) - m_pos->getNodeValue(v);
+			dist = result->getNodeValue(u) - result->getNodeValue(v);
 			force = compute_attr_force(dist);
-			if (m_canMove->getNodeValue(u))
+			if (!m_condition || m_canMove->getNodeValue(u))
 				m_disp->setNodeValue(u, m_disp->getNodeValue(u) - dist * force);
-			if (m_canMove->getNodeValue(v))
+			if (!m_condition || m_canMove->getNodeValue(v))
 				m_disp->setNodeValue(v, m_disp->getNodeValue(v) + dist * force);
 		}
 
@@ -77,7 +93,7 @@ bool FMMMLayoutCustom::run() {
 			disp_norm = m_disp->getNodeValue(n).norm();
 			if (disp_norm != 0 && t < disp_norm) 
 				m_disp->setNodeValue(n, (m_disp->getNodeValue(n) / disp_norm) * t);
-			m_pos->setNodeValue(n, m_pos->getNodeValue(n) + m_disp->getNodeValue(n));
+			result->setNodeValue(n, result->getNodeValue(n) + m_disp->getNodeValue(n));
 			m_disp->setNodeValue(n, tlp::Vec3f());
 		}		
 
@@ -95,9 +111,10 @@ bool FMMMLayoutCustom::run() {
 
 //===================================
 tlp::Graph* inducedSubGraphCustom(std::vector<tlp::node>::iterator begin, std::vector<tlp::node>::iterator end, tlp::Graph *parent, const std::string &name) {
-	if (parent == nullptr)
+	if (parent == nullptr) {
 		std::cerr << "parent graph must exist to create the induced subgraph" << std::endl;
 		return nullptr;
+	}
 
 	tlp::Graph *result = parent->addSubGraph(name);
 	for (auto it = begin; it != end; ++it) {
@@ -120,11 +137,11 @@ void FMMMLayoutCustom::build_tree_aux(tlp::Graph *g, unsigned int level) {
 	std::vector<tlp::node> nodes = g->nodes(); // TODO: find a way to not copy the vector each time...
 	if (level % 2 == 0) {
 		std::sort(nodes.begin(), nodes.end(), [this](tlp::node a, tlp::node b) {
-			return m_pos->getNodeValue(a).x() < m_pos->getNodeValue(b).x();
+			return result->getNodeValue(a).x() < result->getNodeValue(b).x();
 		});
 	} else {
 		std::sort(nodes.begin(), nodes.end(), [this](tlp::node a, tlp::node b) {
-			return m_pos->getNodeValue(a).y() < m_pos->getNodeValue(b).y();
+			return result->getNodeValue(a).y() < result->getNodeValue(b).y();
 		});
 	}
 
@@ -132,8 +149,8 @@ void FMMMLayoutCustom::build_tree_aux(tlp::Graph *g, unsigned int level) {
 	tlp::Graph * leftSubgraph = inducedSubGraphCustom(nodes.begin(), nodes.begin() + medianIndex, g, "unnamed");
 	tlp::Graph * rightSubgraph = inducedSubGraphCustom(nodes.begin() + medianIndex, nodes.end(), g, "unnamed");
 
-	std::pair<tlp::Coord, tlp::Coord> boundingRadiusLeft = tlp::computeBoundingRadius(leftSubgraph, m_pos, m_size, m_rot);
-	std::pair<tlp::Coord, tlp::Coord> boundingRadiusRight = tlp::computeBoundingRadius(rightSubgraph, m_pos, m_size, m_rot);
+	std::pair<tlp::Coord, tlp::Coord> boundingRadiusLeft = tlp::computeBoundingRadius(leftSubgraph, result, m_size, m_rot);
+	std::pair<tlp::Coord, tlp::Coord> boundingRadiusRight = tlp::computeBoundingRadius(rightSubgraph, result, m_size, m_rot);
 	leftSubgraph->setAttribute<tlp::Vec3f>("center", boundingRadiusLeft.first);
 	rightSubgraph->setAttribute<tlp::Vec3f>("center", boundingRadiusRight.first);
 	leftSubgraph->setAttribute<float>("radius", boundingRadiusLeft.first.dist(boundingRadiusLeft.second));
@@ -148,7 +165,7 @@ void FMMMLayoutCustom::build_tree_aux(tlp::Graph *g, unsigned int level) {
 void FMMMLayoutCustom::build_kd_tree() {
 	if (graph->numberOfNodes() < 4) return;
 	m_maxPartitionSize = std::sqrt(graph->numberOfNodes()); // maximum number of vertices in the smallest partition
-	std::pair<tlp::Coord, tlp::Coord> boundingRadius = tlp::computeBoundingRadius(graph, m_pos, m_size, m_rot);
+	std::pair<tlp::Coord, tlp::Coord> boundingRadius = tlp::computeBoundingRadius(graph, result, m_size, m_rot);
 	graph->setAttribute<tlp::Vec3f>("center", boundingRadius.first);
 	graph->setAttribute<float>("radius", boundingRadius.first.dist(boundingRadius.second));
 
@@ -163,7 +180,7 @@ void FMMMLayoutCustom::build_kd_tree() {
 void FMMMLayoutCustom::compute_repl_forces(tlp::node n, tlp::Graph *g) {
 	tlp::Vec3f *center = static_cast<tlp::Vec3f*>(g->getAttribute("center")->value);
 	float *radius = static_cast<float*>(g->getAttribute("radius")->value);
-	tlp::Vec3f dist = m_pos->getNodeValue(n) - *center;
+	tlp::Vec3f dist = result->getNodeValue(n) - *center;
 	if (dist.norm() > *radius) {
 		m_disp->setNodeValue(n, m_disp->getNodeValue(n) + dist * compute_repl_force(dist) * (float)g->numberOfNodes());
 	} else {
@@ -171,7 +188,7 @@ void FMMMLayoutCustom::compute_repl_forces(tlp::node n, tlp::Graph *g) {
 			tlp::node v;
 			forEach (v, g->getNodes()) {
 				if (v != n) {
-					dist = m_pos->getNodeValue(n) - m_pos->getNodeValue(v);
+					dist = result->getNodeValue(n) - result->getNodeValue(v);
 					m_disp->setNodeValue(n, m_disp->getNodeValue(n) + dist * compute_repl_force(dist));
 				}
 			}

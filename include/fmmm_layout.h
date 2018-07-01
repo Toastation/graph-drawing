@@ -7,18 +7,16 @@
 
 class FMMMLayoutCustom : public tlp::LayoutAlgorithm {
 public:
-	PLUGININFORMATION("FM^3 (custom)", "--", "--",
-						"--"
-						"--",
-						"--", 
-						"Force Directed")
+	PLUGININFORMATION("FM^3 (custom)", "Melvin EVEN", "--", "--", "--", "Force Directed")
 	FMMMLayoutCustom(const tlp::PluginContext *context);
 	~FMMMLayoutCustom() override;
+	bool check(std::string &errorMessage) override;
 	bool run() override;
 
 private:
 	bool m_cstTemp;
 	bool m_cstInitTemp;
+	bool m_condition;
 	float m_L;
 	float m_Kr;
 	float m_Ks;
@@ -28,7 +26,6 @@ private:
 	unsigned int m_iterations;
 	unsigned int m_maxPartitionSize;
 	tlp::BooleanProperty *m_canMove;
-	tlp::LayoutProperty *m_pos;
 	tlp::LayoutProperty *m_disp;
 	tlp::SizeProperty *m_size;
 	tlp::DoubleProperty *m_rot;

@@ -1,5 +1,5 @@
 CC=g++
-CFLAGS=-std=c++11 -pedantic -Wno-deprecated-declarations -DNDEBUG
+CFLAGS=-std=c++11 -g -pedantic -Wall -Wno-deprecated-declarations -DNDEBUG
 lib_dir="C:/Program Files/Tulip-5.1.0/bin/"
 include_dir_tulip="C:/Program Files/Tulip-5.1.0/include/"
 include_dir_ogdf=C:/Users/Melvin.Melvin-PC/Desktop/work/ogdf/include/
