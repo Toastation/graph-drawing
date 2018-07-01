@@ -45,16 +45,41 @@ bool FMMMLayoutCustom::run() {
 	bool quit = false;
 	unsigned int i = 1;
 
+	tlp::node n;
+	tlp::node u;
+	tlp::node v;
+	tlp::edge e;
+	tlp::Vec3f dist;
+	float force;
+	float disp_norm;
 	while (!quit) {
 		if (i <= 4 || i % 20 == 0) {
-			// TODO: rebuild kd-tree
+			build_kd_tree();
 		}
 
-		// TODO compute repl forces
+		forEach (n, graph->getNodes()) {
+			if (m_canMove->getNodeValue(n))
+				compute_repl_forces(n, graph);
+		}
 
-		// TODO compute attr forces
+		forEach (e, graph->getEdges()) {
+			u = graph->source(e);
+			v = graph->target(e);
+			dist = m_pos->getNodeValue(u) - m_pos->getNodeValue(v);
+			force = compute_attr_force(dist);
+			if (m_canMove->getNodeValue(u))
+				m_disp->setNodeValue(u, m_disp->getNodeValue(u) - dist * force);
+			if (m_canMove->getNodeValue(v))
+				m_disp->setNodeValue(v, m_disp->getNodeValue(v) + dist * force);
+		}
 
-		// TODO update pos
+		forEach (n, graph->getNodes()) {
+			disp_norm = m_disp->getNodeValue(n).norm();
+			if (disp_norm != 0 && t < disp_norm) 
+				m_disp->setNodeValue(n, (m_disp->getNodeValue(n) / disp_norm) * t);
+			m_pos->setNodeValue(n, m_pos->getNodeValue(n) + m_disp->getNodeValue(n));
+			m_disp->setNodeValue(n, tlp::Vec3f());
+		}		
 
 		if (!m_cstTemp)
 			t *= m_coolingFactor;
@@ -111,8 +136,8 @@ void FMMMLayoutCustom::build_tree_aux(tlp::Graph *g, unsigned int level) {
 	std::pair<tlp::Coord, tlp::Coord> boundingRadiusRight = tlp::computeBoundingRadius(rightSubgraph, m_pos, m_size, m_rot);
 	leftSubgraph->setAttribute<tlp::Vec3f>("center", boundingRadiusLeft.first);
 	rightSubgraph->setAttribute<tlp::Vec3f>("center", boundingRadiusRight.first);
-	leftSubgraph->setAttribute<tlp::Vec3f>("radius", boundingRadiusLeft.first.dist(boundingRadiusLeft.second));
-	rightSubgraph->setAttribute<tlp::Vec3f>("radius", boundingRadiusRight.first.dist(boundingRadiusRight.second));
+	leftSubgraph->setAttribute<float>("radius", boundingRadiusLeft.first.dist(boundingRadiusLeft.second));
+	rightSubgraph->setAttribute<float>("radius", boundingRadiusRight.first.dist(boundingRadiusRight.second));
 	if (std::max(leftSubgraph->numberOfNodes(), rightSubgraph->numberOfNodes()) <= m_maxPartitionSize)
 		return;
 	build_tree_aux(leftSubgraph, level + 1);
@@ -125,10 +150,10 @@ void FMMMLayoutCustom::build_kd_tree() {
 	m_maxPartitionSize = std::sqrt(graph->numberOfNodes()); // maximum number of vertices in the smallest partition
 	std::pair<tlp::Coord, tlp::Coord> boundingRadius = tlp::computeBoundingRadius(graph, m_pos, m_size, m_rot);
 	graph->setAttribute<tlp::Vec3f>("center", boundingRadius.first);
-	graph->setAttribute<tlp::Vec3f>("radius", boundingRadius.first.dist(boundingRadius.second));
+	graph->setAttribute<float>("radius", boundingRadius.first.dist(boundingRadius.second));
 
 	tlp::Graph *subgraph;
-	forEach (subgraph, graph->getSubGraphs()) {
+	stableForEach (subgraph, graph->getSubGraphs()) { // TODO: check if the stableForEach is necessary
 		graph->delAllSubGraphs(subgraph);
 	}
 
