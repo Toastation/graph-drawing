@@ -19,9 +19,7 @@ const float DEFAULT_COOLING_FACTOR = 0.95f;
 const unsigned int DEFAULT_MAX_PARTITION_SIZE = 20;
 const unsigned int DEFAUT_ITERATIONS = 300;
 
-PLUGIN(FMMMLayoutCustom);
-
-
+PLUGIN(FMMMLayoutCustom)
 
 FMMMLayoutCustom::FMMMLayoutCustom(const tlp::PluginContext *context) 
 	: LayoutAlgorithm(context), m_cstTemp(DEFAUT_CST_TEMP), m_cstInitTemp(DEFAUT_CST_INIT_TEMP), m_L(DEFAULT_L), m_Kr(DEFAULT_KR), m_Ks(DEFAULT_KS),
@@ -94,7 +92,7 @@ tlp::Graph* inducedSubGraphCustom(std::vector<tlp::node>::iterator begin, std::v
 //===================================
 
 void FMMMLayoutCustom::build_tree_aux(tlp::Graph *g, tlp::LayoutProperty *pos, tlp::SizeProperty *size, tlp::DoubleProperty *rot, unsigned int level) {
-	std::vector<tlp::node> nodes = g->nodes();
+	std::vector<tlp::node> nodes = g->nodes(); // TODO: find a way to not copy the vector each time...
 	if (level % 2 == 0) {
 		std::sort(nodes.begin(), nodes.end(), [pos](tlp::node a, tlp::node b) {
 			return pos->getNodeValue(a).x() < pos->getNodeValue(b).x();
@@ -123,11 +121,11 @@ void FMMMLayoutCustom::build_tree_aux(tlp::Graph *g, tlp::LayoutProperty *pos, t
 
 
 void FMMMLayoutCustom::build_kd_tree() {
-	if (graph->numberOfNodes < 4) return;
+	if (graph->numberOfNodes() < 4) return;
 	tlp::LayoutProperty *pos = graph->getLocalProperty<tlp::LayoutProperty>("viewLayout");
 	tlp::SizeProperty *size = graph->getLocalProperty<tlp::SizeProperty>("viewSize");
 	tlp::DoubleProperty *rot = graph->getLocalProperty<tlp::DoubleProperty>("viewRotation");
-	m_maxPartitionSize = std::sqrt(graph->numberOfNodes); // maximum number of vertices in the smallest partition
+	m_maxPartitionSize = std::sqrt(graph->numberOfNodes()); // maximum number of vertices in the smallest partition
 	std::pair<tlp::Coord, tlp::Coord> boundingRadius = tlp::computeBoundingRadius(graph, pos, size, rot);
 	graph->setAttribute("center", boundingRadius.first);
 	graph->setAttribute("farthestPoint", boundingRadius.second);
