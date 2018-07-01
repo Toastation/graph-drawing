@@ -180,7 +180,7 @@ class FMMMLayout2():
             it += 1
             if not const_temp: t *= self.t_f
             #updateVisualization()
-        print("number if iterations done: {}".format(it))
+        print("number of iterations done: {}".format(it))
 
 class FrishmanLayout():
     
