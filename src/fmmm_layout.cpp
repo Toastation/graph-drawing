@@ -71,36 +71,6 @@ bool FMMMLayoutCustom::run() {
 }
 
 //===================================
-struct SortedPosNodeIterator : public tlp::StableIterator<tlp::node> {
-	SortedPosNodeIterator(tlp::Iterator<tlp::node> *it, tlp::LayoutProperty *pos, bool horizontal, bool ascending=true) : StableIterator(it) {
-		if (horizontal) {
-			std::sort(sequenceCopy.begin(), sequenceCopy.end(), [pos](tlp::node a, tlp::node b) {
-				return pos->getNodeValue(a).x() < pos->getNodeValue(b).x();
-			});
-		} else {
-			std::sort(sequenceCopy.begin(), sequenceCopy.end(), [pos](tlp::node a, tlp::node b) {
-				return pos->getNodeValue(a).y() < pos->getNodeValue(b).y();
-			});
-		}
-
-		if (!ascending) {
-			std::reverse(sequenceCopy.begin(), sequenceCopy.end());
-		}
-
-		copyIterator = sequenceCopy.begin();
-	}
-
-	std::vector<tlp::node> get_low_part(unsigned int k) {
-		return std::vector<tlp::node>(sequenceCopy.begin(), sequenceCopy.begin() + k);
-	}
-
-	std::vector<tlp::node> get_high_part(unsigned int k) {
-		return std::vector<tlp::node>(sequenceCopy.begin() + k, sequenceCopy.end());		
-	}
-
-	~SortedPosNodeIterator() override {}
-};
-
 tlp::Graph* inducedSubGraphCustom(std::vector<tlp::node>::iterator begin, std::vector<tlp::node>::iterator end, tlp::Graph *parent, const std::string &name) {
 	if (parent == nullptr)
 		std::cerr << "parent graph must exist to create the induced subgraph" << std::endl;
@@ -110,7 +80,7 @@ tlp::Graph* inducedSubGraphCustom(std::vector<tlp::node>::iterator begin, std::v
 	for (auto it = begin; it != end; ++it) {
 		result->addNode(*it);
 	}
-	
+
 	tlp::node n;
 	tlp::edge e;
 	forEach (n, result->getNodes()) {
@@ -124,10 +94,21 @@ tlp::Graph* inducedSubGraphCustom(std::vector<tlp::node>::iterator begin, std::v
 //===================================
 
 void FMMMLayoutCustom::build_tree_aux(tlp::Graph *g, tlp::LayoutProperty *pos, tlp::SizeProperty *size, tlp::DoubleProperty *rot, unsigned int level) {
-	SortedPosNodeIterator nodes(g->getNodes(), pos, level % 2 == 0);
-	unsigned int medianIndex = g->numberOfNodes() / 2;
-	tlp::Graph *leftSubgraph = g->inducedSubGraph(nodes.get_low_part(medianIndex)); // TODO custom inducedSubGraph that takes iterators
-	tlp::Graph *rightSubgraph = g->inducedSubGraph(nodes.get_high_part(medianIndex));
+	std::vector<tlp::node> nodes = g->nodes();
+	if (level % 2 == 0) {
+		std::sort(nodes.begin(), nodes.end(), [pos](tlp::node a, tlp::node b) {
+			return pos->getNodeValue(a).x() < pos->getNodeValue(b).x();
+		});
+	} else {
+		std::sort(nodes.begin(), nodes.end(), [pos](tlp::node a, tlp::node b) {
+			return pos->getNodeValue(a).y() < pos->getNodeValue(b).y();
+		});
+	}
+
+	unsigned int medianIndex = nodes.size() / 2;
+	tlp::Graph * leftSubgraph = inducedSubGraphCustom(nodes.begin(), nodes.begin() + medianIndex, g, "unnamed");
+	tlp::Graph * rightSubgraph = inducedSubGraphCustom(nodes.begin() + medianIndex, nodes.end(), g, "unnamed");
+
 	std::pair<tlp::Coord, tlp::Coord> boundingRadiusLeft = tlp::computeBoundingRadius(leftSubgraph, pos, size, rot);
 	std::pair<tlp::Coord, tlp::Coord> boundingRadiusRight = tlp::computeBoundingRadius(rightSubgraph, pos, size, rot);
 	leftSubgraph->setAttribute("center", boundingRadiusLeft.first);
