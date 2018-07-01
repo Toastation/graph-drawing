@@ -16,6 +16,7 @@ int main() {
         std::cout << errorMessage << std::endl;
     }
 
+    delete graph;
     return EXIT_SUCCESS;
 }
 

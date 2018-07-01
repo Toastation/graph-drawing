@@ -100,12 +100,33 @@ struct SortedPosNodeIterator : public tlp::StableIterator<tlp::node> {
 
 	~SortedPosNodeIterator() override {}
 };
+
+tlp::Graph* inducedSubGraphCustom(std::vector<tlp::node>::iterator begin, std::vector<tlp::node>::iterator end, tlp::Graph *parent, const std::string &name) {
+	if (parent == nullptr)
+		std::cerr << "parent graph must exist to create the induced subgraph" << std::endl;
+		return nullptr;
+
+	tlp::Graph *result = parent->addSubGraph(name);
+	for (auto it = begin; it != end; ++it) {
+		result->addNode(*it);
+	}
+	
+	tlp::node n;
+	tlp::edge e;
+	forEach (n, result->getNodes()) {
+		forEach (e, parent->getOutEdges(n)) {
+			if (result->isElement(parent->target(e)))
+				result->addEdge(e);
+		}
+	}
+	return result;
+}
 //===================================
 
 void FMMMLayoutCustom::build_tree_aux(tlp::Graph *g, tlp::LayoutProperty *pos, tlp::SizeProperty *size, tlp::DoubleProperty *rot, unsigned int level) {
 	SortedPosNodeIterator nodes(g->getNodes(), pos, level % 2 == 0);
 	unsigned int medianIndex = g->numberOfNodes() / 2;
-	tlp::Graph *leftSubgraph = g->inducedSubGraph(nodes.get_low_part(medianIndex));
+	tlp::Graph *leftSubgraph = g->inducedSubGraph(nodes.get_low_part(medianIndex)); // TODO custom inducedSubGraph that takes iterators
 	tlp::Graph *rightSubgraph = g->inducedSubGraph(nodes.get_high_part(medianIndex));
 	std::pair<tlp::Coord, tlp::Coord> boundingRadiusLeft = tlp::computeBoundingRadius(leftSubgraph, pos, size, rot);
 	std::pair<tlp::Coord, tlp::Coord> boundingRadiusRight = tlp::computeBoundingRadius(rightSubgraph, pos, size, rot);
