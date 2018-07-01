@@ -28,6 +28,10 @@ private:
 	unsigned int m_iterations;
 	unsigned int m_maxPartitionSize;
 	tlp::BooleanProperty *m_canMove;
+	tlp::LayoutProperty *m_pos;
+	tlp::LayoutProperty *m_disp;
+	tlp::SizeProperty *m_size;
+	tlp::DoubleProperty *m_rot;
 
 	/**
 	 * @brief Builds the next level of the 2d-tree
@@ -37,7 +41,7 @@ private:
 	 * @param rot The rotations of the nodes (from the root node of the tree)
 	 * @param level The current depth of the tree
 	 */
-	void build_tree_aux(tlp::Graph *g, tlp::LayoutProperty *pos, tlp::SizeProperty *size, tlp::DoubleProperty *rot, unsigned int level);
+	void build_tree_aux(tlp::Graph *g, unsigned int level);
 	
 	/**
 	 * @brief Builds a 2d-tree from the plugin's graph. The tree is stored in the graph hierarchy,
@@ -46,7 +50,11 @@ private:
 	 */
 	void build_kd_tree();
 
-	/******* FORCE MODEL *******/
+	/**
+	 * @brief Computes the repulsives forces that the node is subect to
+	 * @param n The node on which to compute the forces
+	 */
+	void compute_repl_forces(tlp::node n, tlp::Graph *g);
 
 	/**
 	 * @brief Computes the repulsive force between two nodes

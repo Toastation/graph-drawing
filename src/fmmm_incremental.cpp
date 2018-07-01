@@ -52,9 +52,9 @@ bool FMMMIncremental::run() {
 }
 
 bool FMMMIncremental::computeDifference(tlp::Graph *oldGraph, tlp::Graph *newGraph) {
-    tlp::BooleanProperty *isNewNode = newGraph->getProperty<tlp::BooleanProperty>("isNewNode");
-    tlp::BooleanProperty *isNewEdge = newGraph->getProperty<tlp::BooleanProperty>("isNewEdge");
-    tlp::BooleanProperty *adjacentToDeletedEdge = newGraph->getProperty<tlp::BooleanProperty>("adjDeletedEdge");
+    tlp::BooleanProperty *isNewNode = newGraph->getLocalProperty<tlp::BooleanProperty>("isNewNode");
+    tlp::BooleanProperty *isNewEdge = newGraph->getLocalProperty<tlp::BooleanProperty>("isNewEdge");
+    tlp::BooleanProperty *adjacentToDeletedEdge = newGraph->getLocalProperty<tlp::BooleanProperty>("adjDeletedEdge");
     isNewNode->setAllNodeValue(false);
     isNewEdge->setAllNodeValue(false);
     adjacentToDeletedEdge->setAllNodeValue(false);
@@ -90,13 +90,13 @@ bool FMMMIncremental::computeDifference(tlp::Graph *oldGraph, tlp::Graph *newGra
 }
 
 bool FMMMIncremental::positionNodes(tlp::Graph *g) {
-    tlp::BooleanProperty *isNewNode = g->getProperty<tlp::BooleanProperty>("isNewNode");
-    tlp::BooleanProperty *adjacentToDeletedEdge = g->getProperty<tlp::BooleanProperty>("adjDeletedEdge");
-    tlp::BooleanProperty *canMove = g->getProperty<tlp::BooleanProperty>("canMove");
-    tlp::BooleanProperty *positioned = g->getProperty<tlp::BooleanProperty>("positioned");
-    tlp::LayoutProperty *pos = g->getProperty<tlp::LayoutProperty>("viewLayout");
-    tlp::DoubleProperty *rot = g->getProperty<tlp::DoubleProperty>("viewRotation");
-    tlp::SizeProperty *size = g->getProperty<tlp::SizeProperty>("viewSize");
+    tlp::BooleanProperty *isNewNode = g->getLocalProperty<tlp::BooleanProperty>("isNewNode");
+    tlp::BooleanProperty *adjacentToDeletedEdge = g->getLocalProperty<tlp::BooleanProperty>("adjDeletedEdge");
+    tlp::BooleanProperty *canMove = g->getLocalProperty<tlp::BooleanProperty>("canMove");
+    tlp::BooleanProperty *positioned = g->getLocalProperty<tlp::BooleanProperty>("positioned");
+    tlp::LayoutProperty *pos = g->getLocalProperty<tlp::LayoutProperty>("viewLayout");
+    tlp::DoubleProperty *rot = g->getLocalProperty<tlp::DoubleProperty>("viewRotation");
+    tlp::SizeProperty *size = g->getLocalProperty<tlp::SizeProperty>("viewSize");
     canMove->setAllNodeValue(false);
     positioned->setAllNodeValue(false);
 
