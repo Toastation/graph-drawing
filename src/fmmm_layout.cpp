@@ -1,8 +1,10 @@
 #include <fmmm_layout.h>
 
 #include <tulip/DrawingTools.h>
+#include <tulip/ForEach.h>
 
 #include <cstdlib>
+#include <cmath>
 #include <algorithm>
 
 
@@ -18,6 +20,8 @@ const unsigned int DEFAULT_MAX_PARTITION_SIZE = 20;
 const unsigned int DEFAUT_ITERATIONS = 300;
 
 PLUGIN(FMMMLayoutCustom);
+
+
 
 FMMMLayoutCustom::FMMMLayoutCustom(const tlp::PluginContext *context) 
 	: LayoutAlgorithm(context), m_cstTemp(DEFAUT_CST_TEMP), m_cstInitTemp(DEFAUT_CST_INIT_TEMP), m_L(DEFAULT_L), m_Kr(DEFAULT_KR), m_Ks(DEFAULT_KS),
@@ -64,4 +68,72 @@ bool FMMMLayoutCustom::run() {
 	std::cout << "Iterations done: " << i << std::endl;
 
 	return true;
+}
+
+//===================================
+struct SortedPosNodeIterator : public tlp::StableIterator<tlp::node> {
+	SortedPosNodeIterator(tlp::Iterator<tlp::node> *it, tlp::LayoutProperty *pos, bool horizontal, bool ascending=true) : StableIterator(it) {
+		if (horizontal) {
+			std::sort(sequenceCopy.begin(), sequenceCopy.end(), [pos](tlp::node a, tlp::node b) {
+				return pos->getNodeValue(a).x() < pos->getNodeValue(b).x();
+			});
+		} else {
+			std::sort(sequenceCopy.begin(), sequenceCopy.end(), [pos](tlp::node a, tlp::node b) {
+				return pos->getNodeValue(a).y() < pos->getNodeValue(b).y();
+			});
+		}
+
+		if (!ascending) {
+			std::reverse(sequenceCopy.begin(), sequenceCopy.end());
+		}
+
+		copyIterator = sequenceCopy.begin();
+	}
+
+	std::vector<tlp::node> get_low_part(unsigned int k) {
+		return std::vector<tlp::node>(sequenceCopy.begin(), sequenceCopy.begin() + k);
+	}
+
+	std::vector<tlp::node> get_high_part(unsigned int k) {
+		return std::vector<tlp::node>(sequenceCopy.begin() + k, sequenceCopy.end());		
+	}
+
+	~SortedPosNodeIterator() override {}
+};
+//===================================
+
+void FMMMLayoutCustom::build_tree_aux(tlp::Graph *g, tlp::LayoutProperty *pos, tlp::SizeProperty *size, tlp::DoubleProperty *rot, unsigned int level) {
+	SortedPosNodeIterator nodes(g->getNodes(), pos, level % 2 == 0);
+	unsigned int medianIndex = g->numberOfNodes() / 2;
+	tlp::Graph *leftSubgraph = g->inducedSubGraph(nodes.get_low_part(medianIndex));
+	tlp::Graph *rightSubgraph = g->inducedSubGraph(nodes.get_high_part(medianIndex));
+	std::pair<tlp::Coord, tlp::Coord> boundingRadiusLeft = tlp::computeBoundingRadius(leftSubgraph, pos, size, rot);
+	std::pair<tlp::Coord, tlp::Coord> boundingRadiusRight = tlp::computeBoundingRadius(rightSubgraph, pos, size, rot);
+	leftSubgraph->setAttribute("center", boundingRadiusLeft.first);
+	rightSubgraph->setAttribute("center", boundingRadiusRight.first);
+	leftSubgraph->setAttribute("farthestPoint", boundingRadiusLeft.second);
+	rightSubgraph->setAttribute("farthestPoint", boundingRadiusRight.second);
+	if (std::max(leftSubgraph->numberOfNodes(), rightSubgraph->numberOfNodes()) <= m_maxPartitionSize)
+		return;
+	build_tree_aux(leftSubgraph, pos, size, rot, level + 1);
+	build_tree_aux(rightSubgraph, pos, size, rot, level + 1);
+}
+
+
+void FMMMLayoutCustom::build_kd_tree() {
+	if (graph->numberOfNodes < 4) return;
+	tlp::LayoutProperty *pos = graph->getLocalProperty<tlp::LayoutProperty>("viewLayout");
+	tlp::SizeProperty *size = graph->getLocalProperty<tlp::SizeProperty>("viewSize");
+	tlp::DoubleProperty *rot = graph->getLocalProperty<tlp::DoubleProperty>("viewRotation");
+	m_maxPartitionSize = std::sqrt(graph->numberOfNodes); // maximum number of vertices in the smallest partition
+	std::pair<tlp::Coord, tlp::Coord> boundingRadius = tlp::computeBoundingRadius(graph, pos, size, rot);
+	graph->setAttribute("center", boundingRadius.first);
+	graph->setAttribute("farthestPoint", boundingRadius.second);
+
+	tlp::Graph *subgraph;
+	forEach (subgraph, graph->getSubGraphs()) {
+		graph->delAllSubGraphs(subgraph);
+	}
+
+	build_tree_aux(graph, pos, size, rot, 0);
 }

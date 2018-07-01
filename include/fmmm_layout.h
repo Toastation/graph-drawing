@@ -29,6 +29,9 @@ private:
 	unsigned int m_maxPartitionSize;
 	tlp::BooleanProperty *m_canMove;
 
+	void build_tree_aux(tlp::Graph *g, tlp::LayoutProperty *pos, tlp::SizeProperty *size, tlp::DoubleProperty *rot, unsigned int level);
+	void build_kd_tree();
+
 	/******* FORCE MODEL *******/
 
 	/**
