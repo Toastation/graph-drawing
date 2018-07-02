@@ -1,5 +1,6 @@
 #include <fmmm_layout.h>
 
+#include <tulip/BoundingBox.h>
 #include <tulip/DrawingTools.h>
 #include <tulip/ForEach.h>
 #include <tulip/DataSet.h>
@@ -11,6 +12,7 @@
 #include <cstdlib>
 #include <cmath>
 #include <algorithm>
+#include <chrono>
 
 
 const bool DEFAUT_CST_TEMP = false;
@@ -41,7 +43,9 @@ bool FMMMLayoutCustom::check(std::string &errorMessage) {
 	m_condition = false;
 
 	if (dataSet != nullptr)
-		m_condition = dataSet->get("movable nodes", m_canMove);
+		m_condition = dataSet->exist("movable nodes");
+		if (m_condition)
+			dataSet->get("movable nodes", m_canMove);
 
 	result->copy(graph->getProperty<tlp::LayoutProperty>("viewLayout"));
 	m_disp = graph->getLocalProperty<tlp::LayoutProperty>("disp");
@@ -52,12 +56,11 @@ bool FMMMLayoutCustom::check(std::string &errorMessage) {
 
 
 bool FMMMLayoutCustom::run() {
-	std::cout << "running..." << std::endl;
 	tlp::BoundingBox bb = tlp::computeBoundingBox(graph, result, m_size, m_rot);
+	pluginProgress->setComment("init t...");
 	float t = m_cstInitTemp ? m_initTemp : std::min(bb.width(), bb.height()) * m_initTempFactor;
-
+	float init_temp = t;
 	std::cout << "Init temp: " << t << std::endl;
-
 	bool quit = false;
 	unsigned int i = 1;
 
@@ -68,6 +71,10 @@ bool FMMMLayoutCustom::run() {
 	tlp::Vec3f dist;
 	float force;
 	float disp_norm;
+	std::string message = "Initial temperature: ";
+	message += std::to_string(init_temp);
+	pluginProgress->setComment(message);
+	auto start = std::chrono::high_resolution_clock::now();
 	while (!quit) {
 		if (i <= 4 || i % 20 == 0) {
 			build_kd_tree();
@@ -83,7 +90,7 @@ bool FMMMLayoutCustom::run() {
 			v = graph->target(e);
 			dist = result->getNodeValue(u) - result->getNodeValue(v);
 			force = compute_attr_force(dist);
-			if (!m_condition || m_canMove->getNodeValue(u))
+			if (!m_condition)
 				m_disp->setNodeValue(u, m_disp->getNodeValue(u) - dist * force);
 			if (!m_condition || m_canMove->getNodeValue(v))
 				m_disp->setNodeValue(v, m_disp->getNodeValue(v) + dist * force);
@@ -100,11 +107,14 @@ bool FMMMLayoutCustom::run() {
 		if (!m_cstTemp)
 			t *= m_coolingFactor;
 
-		quit = i > m_iterations || quit;
+		quit = i >= m_iterations || quit;
 		++i;
+		pluginProgress->progress(i, m_iterations);
 	}
-
-	std::cout << "Iterations done: " << i << std::endl;
+	auto end = std::chrono::high_resolution_clock::now();
+	std::chrono::duration<double> elapsed = end - start;
+	std::cout << "elapsed: " << elapsed.count() << std::endl;
+	std::cout << "Iterations done: " << i  << std::endl;
 
 	return true;
 }
@@ -164,7 +174,7 @@ void FMMMLayoutCustom::build_tree_aux(tlp::Graph *g, unsigned int level) {
 
 void FMMMLayoutCustom::build_kd_tree() {
 	if (graph->numberOfNodes() < 4) return;
-	m_maxPartitionSize = std::sqrt(graph->numberOfNodes()); // maximum number of vertices in the smallest partition
+	m_maxPartitionSize = 4; // maximum number of vertices in the smallest partition
 	std::pair<tlp::Coord, tlp::Coord> boundingRadius = tlp::computeBoundingRadius(graph, result, m_size, m_rot);
 	graph->setAttribute<tlp::Vec3f>("center", boundingRadius.first);
 	graph->setAttribute<float>("radius", boundingRadius.first.dist(boundingRadius.second));

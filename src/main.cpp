@@ -9,11 +9,9 @@
 int main() {
     tlp::initTulipLib();
 
-    tlp::Graph *graph = tlp::loadGraph("C:/Users/Melvin.Melvin-PC/Desktop/work/graph-drawing/graphs/other/test.json");
+    tlp::Graph *graph = tlp::loadGraph("C:/Users/Melvin.Melvin-PC/Desktop/work/graph-drawing/graphs/other/n1000.json");
     tlp::saveGraph(graph, "before.tlp");
 
-
-    tlp::DataSet ds;
     std::string errorMessage;
     tlp::LayoutProperty *layout = graph->getLocalProperty<tlp::LayoutProperty>("viewLayout");
     graph->applyPropertyAlgorithm("FM^3 (custom)", layout, errorMessage);
