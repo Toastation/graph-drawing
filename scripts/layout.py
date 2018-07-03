@@ -1,6 +1,7 @@
 from tulip import tlp
 from multipole_expansion import KDTree, MultipoleExpansion
 import math
+import time
 
 DEFAULT_ITERATIONS = 300
 REPL_CONST = 4.0
@@ -155,6 +156,7 @@ class FMMMLayout2():
         conv_threshold = 6 / graph.numberOfNodes()
         quit = False
         it = 1
+        start = time.time()
         while not quit:
             total_disp = 0
             if it <= 4 or it % 20 == 0: # recompute the tree for the first 4 iterations and then every 20 iterations
@@ -180,6 +182,8 @@ class FMMMLayout2():
             it += 1
             if not const_temp: t *= self.t_f
             #updateVisualization()
+        end = time.time()
+        print(end - start)
         print("number of iterations done: {}".format(it))
 
 class FrishmanLayout():

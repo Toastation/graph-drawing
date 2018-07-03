@@ -13,6 +13,7 @@
 #include <cmath>
 #include <algorithm>
 #include <chrono>
+#include <complex>
 
 
 const bool DEFAUT_CST_TEMP = false;
@@ -23,7 +24,7 @@ const float DEFAULT_KS = 1.0f;
 const float DEFAULT_INIT_TEMP = 200.0f;
 const float DEFAULT_INIT_TEMP_FACTOR = 0.2f;
 const float DEFAULT_COOLING_FACTOR = 0.95f;
-const unsigned int DEFAULT_MAX_PARTITION_SIZE = 20;
+const unsigned int DEFAULT_MAX_PARTITION_SIZE = 4;
 const unsigned int DEFAUT_ITERATIONS = 300;
 
 PLUGIN(FMMMLayoutCustom)
@@ -32,7 +33,8 @@ FMMMLayoutCustom::FMMMLayoutCustom(const tlp::PluginContext *context)
 	: LayoutAlgorithm(context), m_cstTemp(DEFAUT_CST_TEMP), m_cstInitTemp(DEFAUT_CST_INIT_TEMP), m_L(DEFAULT_L), m_Kr(DEFAULT_KR), m_Ks(DEFAULT_KS),
 	  m_initTemp(DEFAULT_INIT_TEMP), m_initTempFactor(DEFAULT_INIT_TEMP_FACTOR), m_coolingFactor(DEFAULT_COOLING_FACTOR), m_iterations(DEFAUT_ITERATIONS), 
 	  m_maxPartitionSize(DEFAULT_MAX_PARTITION_SIZE) {
-	addInParameter<tlp::BooleanProperty>("movable nodes", "Set of nodes allowed to move. If nothing is given, all nodes are allowed to move.", "", false);
+	addInParameter<bool>("block nodes", "If true, only nodes in the set \"movable nodes\" will move.", "", false);
+	addInParameter<tlp::BooleanProperty>("movable nodes", "Set of nodes allowed to move. Only taken into account if \"blocked nodes\" is true", "", false);
 }
 
 FMMMLayoutCustom::~FMMMLayoutCustom() {
@@ -42,11 +44,10 @@ FMMMLayoutCustom::~FMMMLayoutCustom() {
 bool FMMMLayoutCustom::check(std::string &errorMessage) {
 	m_condition = false;
 
-	if (dataSet != nullptr)
-		m_condition = dataSet->exist("movable nodes");
-		if (m_condition)
-			dataSet->get("movable nodes", m_canMove);
-
+	if (dataSet != nullptr) {
+		dataSet->get("block nodes", m_condition); 		
+		dataSet->get("movable nodes", m_canMove);
+	}
 	result->copy(graph->getProperty<tlp::LayoutProperty>("viewLayout"));
 	m_disp = graph->getLocalProperty<tlp::LayoutProperty>("disp");
 	m_size = graph->getLocalProperty<tlp::SizeProperty>("viewSize");
@@ -74,7 +75,7 @@ bool FMMMLayoutCustom::run() {
 	std::string message = "Initial temperature: ";
 	message += std::to_string(init_temp);
 	pluginProgress->setComment(message);
-	auto start = std::chrono::high_resolution_clock::now();
+	// auto start = std::chrono::high_resolution_clock::now();
 	while (!quit) {
 		if (i <= 4 || i % 20 == 0) {
 			build_kd_tree();
@@ -90,7 +91,7 @@ bool FMMMLayoutCustom::run() {
 			v = graph->target(e);
 			dist = result->getNodeValue(u) - result->getNodeValue(v);
 			force = compute_attr_force(dist);
-			if (!m_condition)
+			if (!m_condition || m_canMove->getNodeValue(u))
 				m_disp->setNodeValue(u, m_disp->getNodeValue(u) - dist * force);
 			if (!m_condition || m_canMove->getNodeValue(v))
 				m_disp->setNodeValue(v, m_disp->getNodeValue(v) + dist * force);
@@ -102,18 +103,22 @@ bool FMMMLayoutCustom::run() {
 				m_disp->setNodeValue(n, (m_disp->getNodeValue(n) / disp_norm) * t);
 			result->setNodeValue(n, result->getNodeValue(n) + m_disp->getNodeValue(n));
 			m_disp->setNodeValue(n, tlp::Vec3f());
-		}		
+		}
 
 		if (!m_cstTemp)
 			t *= m_coolingFactor;
 
 		quit = i >= m_iterations || quit;
 		++i;
+
 		pluginProgress->progress(i, m_iterations);
+		if (pluginProgress->state() != tlp::TLP_CONTINUE) {
+			break;
+		}
 	}
-	auto end = std::chrono::high_resolution_clock::now();
-	std::chrono::duration<double> elapsed = end - start;
-	std::cout << "elapsed: " << elapsed.count() << std::endl;
+	// auto end = std::chrono::high_resolution_clock::now();
+	// std::chrono::duration<double> elapsed = end - start;
+	// std::cout << "elapsed: " << elapsed.count() << std::endl;
 	std::cout << "Iterations done: " << i  << std::endl;
 
 	return true;
@@ -158,6 +163,8 @@ void FMMMLayoutCustom::build_tree_aux(tlp::Graph *g, unsigned int level) {
 	unsigned int medianIndex = nodes.size() / 2;
 	tlp::Graph * leftSubgraph = inducedSubGraphCustom(nodes.begin(), nodes.begin() + medianIndex, g, "unnamed");
 	tlp::Graph * rightSubgraph = inducedSubGraphCustom(nodes.begin() + medianIndex, nodes.end(), g, "unnamed");
+	compute_coef(leftSubgraph);
+	compute_coef(rightSubgraph);
 
 	std::pair<tlp::Coord, tlp::Coord> boundingRadiusLeft = tlp::computeBoundingRadius(leftSubgraph, result, m_size, m_rot);
 	std::pair<tlp::Coord, tlp::Coord> boundingRadiusRight = tlp::computeBoundingRadius(rightSubgraph, result, m_size, m_rot);
@@ -173,8 +180,7 @@ void FMMMLayoutCustom::build_tree_aux(tlp::Graph *g, unsigned int level) {
 
 
 void FMMMLayoutCustom::build_kd_tree() {
-	if (graph->numberOfNodes() < 4) return;
-	m_maxPartitionSize = 4; // maximum number of vertices in the smallest partition
+	if (graph->numberOfNodes() < m_maxPartitionSize) return;
 	std::pair<tlp::Coord, tlp::Coord> boundingRadius = tlp::computeBoundingRadius(graph, result, m_size, m_rot);
 	graph->setAttribute<tlp::Vec3f>("center", boundingRadius.first);
 	graph->setAttribute<float>("radius", boundingRadius.first.dist(boundingRadius.second));
@@ -186,6 +192,31 @@ void FMMMLayoutCustom::build_kd_tree() {
 
 	build_tree_aux(graph,  0);
 }
+
+void FMMMLayoutCustom::compute_coef(tlp::Graph *g) {
+	tlp::Vec3f *center = static_cast<tlp::Vec3f*>(g->getAttribute("center")->value);	
+	std::complex<float> z0(center->x(), center->y());
+	std::complex<float> zv;
+	std::complex<float> zvMinusz0OverK;
+	std::vector<std::complex<float>> coefs;
+	coefs.reserve(5);
+	for (int i = 0; i < 5; i++)
+		coefs.push_back(std::complex<float>(0, 0));
+	coefs[0] += g->numberOfNodes();
+	tlp::node v;
+	tlp::Vec3f pos;
+	forEach(v, g->getNodes()) {
+		pos = result->getNodeValue(v);
+		zv = std::complex<float>(pos.x(), pos.y());
+		zvMinusz0OverK = zv - z0;
+		for (int k = 1; k < 5; k++) {
+			coefs[k] = (-1.0f * zvMinusz0OverK) / (float)k;
+			zvMinusz0OverK *= zv - z0;
+		}
+	}
+	g->setAttribute("coefs", coefs);
+}
+
 
 void FMMMLayoutCustom::compute_repl_forces(tlp::node n, tlp::Graph *g) {
 	tlp::Vec3f *center = static_cast<tlp::Vec3f*>(g->getAttribute("center")->value);

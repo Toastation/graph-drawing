@@ -47,6 +47,8 @@ private:
 	 */
 	void build_kd_tree();
 
+	void compute_coef(tlp::Graph *g);
+
 	/**
 	 * @brief Computes the repulsives forces that the node is subect to
 	 * @param n The node on which to compute the forces
@@ -62,7 +64,8 @@ private:
 		float dist_norm = dist.norm();
 		if (dist_norm == 0) // push the nodes apart slightly 
 			return ((float) std::rand()) / (float) RAND_MAX;;
-		return m_Kr / (dist_norm * dist_norm * dist_norm);
+		// return m_Kr / (dist_norm * dist_norm * dist_norm);
+		return 512*8 / (dist_norm * dist_norm * dist_norm);
 	}
 
 	/**
@@ -74,7 +77,8 @@ private:
 		float dist_norm = dist.norm();
 		if (dist_norm == 0) // push the nodes apart slightly 
 			return ((float) std::rand()) / (float) RAND_MAX;;
-		return m_Ks * (dist_norm - m_L) / dist_norm;
+		// return m_Ks * (dist_norm - m_L) / dist_norm;
+		return dist_norm * std::log(dist_norm / 0.704*8);
 	}
 
 	/**
