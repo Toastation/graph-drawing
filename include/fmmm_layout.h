@@ -14,21 +14,22 @@ public:
 	bool run() override;
 
 private:
-	bool m_cstTemp;
-	bool m_cstInitTemp;
-	bool m_condition;
-	float m_L;
-	float m_Kr;
-	float m_Ks;
-	float m_initTemp;
-	float m_initTempFactor;
-	float m_coolingFactor;
-	unsigned int m_iterations;
-	unsigned int m_maxPartitionSize;
-	tlp::BooleanProperty *m_canMove;
-	tlp::LayoutProperty *m_disp;
-	tlp::SizeProperty *m_size;
-	tlp::DoubleProperty *m_rot;
+	bool m_cstTemp;								// Whether or not the annealing temperature is constant
+	bool m_cstInitTemp;							// Whether or not the initial annealing temperature is predefined. If false, it is the the initial temperature is sqrt(|V|) 
+	bool m_condition;							// Whether or not to block certain nodes.
+	float m_L;									// Ideal edge length
+	float m_Kr;									// Repulsive force constant
+	float m_Ks;									// Spring force constant
+	float m_initTemp;							// Initial annealing temperature (if m_cstInitTemp is true)
+	float m_initTempFactor;						// Factor to apply on the initial annealing temperature (if m_cstInitTemp is false)
+	float m_coolingFactor;						// Cooling rate of the annealing temperature
+	unsigned int m_iterations;					// Number of iterations
+	unsigned int m_maxPartitionSize;			// Maximum number of nodes of the smallest partition of the graph (via KD-tree)
+	unsigned int m_pTerm;						// Number of term to compute in the p-term multipole expansion
+	tlp::BooleanProperty *m_canMove;			// Which nodes are able to move
+	tlp::LayoutProperty *m_disp;				// Displacement of each node
+	tlp::SizeProperty *m_size;					// viewSize
+	tlp::DoubleProperty *m_rot;					// viewRotation
 
 	/**
 	 * @brief Builds the next level of the 2d-tree
@@ -47,6 +48,11 @@ private:
 	 */
 	void build_kd_tree();
 
+	/**
+	 * @brief Computes the coefficients of the multipole expansion of the graph. Stores the result in
+	 * a graph attribute called "coefs" (std::vector<std::complex<float>>)
+	 * @param g The graph from which to compute the coefficients
+	 */
 	void compute_coef(tlp::Graph *g);
 
 	/**

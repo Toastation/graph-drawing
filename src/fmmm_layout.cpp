@@ -196,22 +196,26 @@ void FMMMLayoutCustom::build_kd_tree() {
 void FMMMLayoutCustom::compute_coef(tlp::Graph *g) {
 	tlp::Vec3f *center = static_cast<tlp::Vec3f*>(g->getAttribute("center")->value);	
 	std::complex<float> z0(center->x(), center->y());
-	std::complex<float> zv;
-	std::complex<float> zvMinusz0OverK;
+	std::complex<float> zi;
+	std::complex<float> ziMinusz0Overk;
+	
 	std::vector<std::complex<float>> coefs;
-	coefs.reserve(5);
-	for (int i = 0; i < 5; i++)
+	unsigned int nbCoefs = m_pTerm + 1;
+	coefs.reserve(nbCoefs);
+	for (int i = 0; i < nbCoefs; i++)
 		coefs.push_back(std::complex<float>(0, 0));
-	coefs[0] += g->numberOfNodes();
+	coefs[0] += g->numberOfNodes(); // a0
+
 	tlp::node v;
 	tlp::Vec3f pos;
 	forEach(v, g->getNodes()) {
 		pos = result->getNodeValue(v);
-		zv = std::complex<float>(pos.x(), pos.y());
-		zvMinusz0OverK = zv - z0;
-		for (int k = 1; k < 5; k++) {
-			coefs[k] = (-1.0f * zvMinusz0OverK) / (float)k;
-			zvMinusz0OverK *= zv - z0;
+		zi = std::complex<float>(pos.x(), pos.y());
+		ziMinusz0Overk = zi - z0; 
+
+		for (int k = 1; k < nbCoefs; k++) {
+			coefs[k] = -1.0f * ziMinusz0Overk / (float)k; // ak
+			ziMinusz0Overk *= ziMinusz0Overk; // next power
 		}
 	}
 	g->setAttribute("coefs", coefs);
@@ -224,6 +228,7 @@ void FMMMLayoutCustom::compute_repl_forces(tlp::node n, tlp::Graph *g) {
 	tlp::Vec3f dist = result->getNodeValue(n) - *center;
 	if (dist.norm() > *radius) {
 		m_disp->setNodeValue(n, m_disp->getNodeValue(n) + dist * compute_repl_force(dist) * (float)g->numberOfNodes());
+
 	} else {
 		if (g->numberOfSubGraphs() == 0) { // leaf case 
 			tlp::node v;
