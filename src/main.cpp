@@ -10,7 +10,6 @@ int main() {
     tlp::initTulipLib();
 
     tlp::Graph *graph = tlp::loadGraph("C:/Users/Melvin.Melvin-PC/Desktop/work/graph-drawing/graphs/other/n1000.json");
-    tlp::saveGraph(graph, "before.tlp");
 
     std::string errorMessage;
     tlp::LayoutProperty *layout = graph->getLocalProperty<tlp::LayoutProperty>("viewLayout");
@@ -19,7 +18,6 @@ int main() {
     if (!errorMessage.empty()) {
         std::cout << errorMessage << std::endl;
     }
-    tlp::saveGraph(graph, "after.tlp");
     delete graph;
     std::cout << "goodbye!" << std::endl;
     return EXIT_SUCCESS;

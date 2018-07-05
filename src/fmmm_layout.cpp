@@ -8,6 +8,7 @@
 #include <tulip/DoubleProperty.h>	
 #include <tulip/SizeProperty.h>
 #include <tulip/BooleanProperty.h>	
+#include <tulip/ColorProperty.h>
 
 #include <cstdlib>
 #include <cmath>
@@ -25,6 +26,7 @@ const float DEFAULT_INIT_TEMP = 200.0f;
 const float DEFAULT_INIT_TEMP_FACTOR = 0.2f;
 const float DEFAULT_COOLING_FACTOR = 0.95f;
 const unsigned int DEFAULT_MAX_PARTITION_SIZE = 4;
+const unsigned int DEFAULT_PTERM = 4;
 const unsigned int DEFAUT_ITERATIONS = 300;
 
 PLUGIN(FMMMLayoutCustom)
@@ -32,7 +34,8 @@ PLUGIN(FMMMLayoutCustom)
 FMMMLayoutCustom::FMMMLayoutCustom(const tlp::PluginContext *context) 
 	: LayoutAlgorithm(context), m_cstTemp(DEFAUT_CST_TEMP), m_cstInitTemp(DEFAUT_CST_INIT_TEMP), m_L(DEFAULT_L), m_Kr(DEFAULT_KR), m_Ks(DEFAULT_KS),
 	  m_initTemp(DEFAULT_INIT_TEMP), m_initTempFactor(DEFAULT_INIT_TEMP_FACTOR), m_coolingFactor(DEFAULT_COOLING_FACTOR), m_iterations(DEFAUT_ITERATIONS), 
-	  m_maxPartitionSize(DEFAULT_MAX_PARTITION_SIZE) {
+	  m_maxPartitionSize(DEFAULT_MAX_PARTITION_SIZE), m_pTerm(DEFAULT_PTERM) {
+	addInParameter<bool>("multipole expansion", "", "", false);
 	addInParameter<bool>("block nodes", "If true, only nodes in the set \"movable nodes\" will move.", "", false);
 	addInParameter<tlp::BooleanProperty>("movable nodes", "Set of nodes allowed to move. Only taken into account if \"blocked nodes\" is true", "", false);
 }
@@ -43,8 +46,10 @@ FMMMLayoutCustom::~FMMMLayoutCustom() {
 
 bool FMMMLayoutCustom::check(std::string &errorMessage) {
 	m_condition = false;
+	m_multipoleExpansion = false;
 
 	if (dataSet != nullptr) {
+		dataSet->get("multipole expansion", m_multipoleExpansion); 		
 		dataSet->get("block nodes", m_condition); 		
 		dataSet->get("movable nodes", m_canMove);
 	}
@@ -64,7 +69,6 @@ bool FMMMLayoutCustom::run() {
 	std::cout << "Init temp: " << t << std::endl;
 	bool quit = false;
 	unsigned int i = 1;
-
 	tlp::node n;
 	tlp::node u;
 	tlp::node v;
@@ -72,10 +76,12 @@ bool FMMMLayoutCustom::run() {
 	tlp::Vec3f dist;
 	float force;
 	float disp_norm;
+	
 	std::string message = "Initial temperature: ";
 	message += std::to_string(init_temp);
 	pluginProgress->setComment(message);
-	// auto start = std::chrono::high_resolution_clock::now();
+
+	auto start = std::chrono::high_resolution_clock::now();
 	while (!quit) {
 		if (i <= 4 || i % 20 == 0) {
 			build_kd_tree();
@@ -116,9 +122,9 @@ bool FMMMLayoutCustom::run() {
 			break;
 		}
 	}
-	// auto end = std::chrono::high_resolution_clock::now();
-	// std::chrono::duration<double> elapsed = end - start;
-	// std::cout << "elapsed: " << elapsed.count() << std::endl;
+	auto end = std::chrono::high_resolution_clock::now();
+	std::chrono::duration<double> elapsed = end - start;
+	std::cout << "elapsed: " << elapsed.count() << std::endl;
 	std::cout << "Iterations done: " << i  << std::endl;
 
 	return true;
@@ -163,16 +169,31 @@ void FMMMLayoutCustom::build_tree_aux(tlp::Graph *g, unsigned int level) {
 	unsigned int medianIndex = nodes.size() / 2;
 	tlp::Graph * leftSubgraph = inducedSubGraphCustom(nodes.begin(), nodes.begin() + medianIndex, g, "unnamed");
 	tlp::Graph * rightSubgraph = inducedSubGraphCustom(nodes.begin() + medianIndex, nodes.end(), g, "unnamed");
-	compute_coef(leftSubgraph);
-	compute_coef(rightSubgraph);
-
 	std::pair<tlp::Coord, tlp::Coord> boundingRadiusLeft = tlp::computeBoundingRadius(leftSubgraph, result, m_size, m_rot);
 	std::pair<tlp::Coord, tlp::Coord> boundingRadiusRight = tlp::computeBoundingRadius(rightSubgraph, result, m_size, m_rot);
 	leftSubgraph->setAttribute<tlp::Vec3f>("center", boundingRadiusLeft.first);
 	rightSubgraph->setAttribute<tlp::Vec3f>("center", boundingRadiusRight.first);
 	leftSubgraph->setAttribute<float>("radius", boundingRadiusLeft.first.dist(boundingRadiusLeft.second));
 	rightSubgraph->setAttribute<float>("radius", boundingRadiusRight.first.dist(boundingRadiusRight.second));
-	if (std::max(leftSubgraph->numberOfNodes(), rightSubgraph->numberOfNodes()) <= m_maxPartitionSize)
+
+	tlp::ColorProperty *leftColor = leftSubgraph->getProperty<tlp::ColorProperty>("viewColor");
+	tlp::ColorProperty *rightColor = leftSubgraph->getProperty<tlp::ColorProperty>("viewColor");
+	tlp::node n;
+	tlp::Color color(std::rand() % 255, std::rand() % 255, std::rand() % 255);
+	forEach (n, leftSubgraph->getNodes()) {
+		leftColor->setNodeValue(n, color);
+	}
+	color = tlp::Color(std::rand() % 255, std::rand() % 255, std::rand() % 255);
+	forEach (n, rightSubgraph->getNodes()) {
+		rightColor->setNodeValue(n, color);		
+	}
+
+	if (m_multipoleExpansion) {
+		compute_coef(leftSubgraph);
+		compute_coef(rightSubgraph);
+	}
+
+	if (std::min(leftSubgraph->numberOfNodes(), rightSubgraph->numberOfNodes()) <= m_maxPartitionSize)
 		return;
 	build_tree_aux(leftSubgraph, level + 1);
 	build_tree_aux(rightSubgraph, level + 1);
@@ -190,6 +211,7 @@ void FMMMLayoutCustom::build_kd_tree() {
 		graph->delAllSubGraphs(subgraph);
 	}
 
+	compute_coef(graph);
 	build_tree_aux(graph,  0);
 }
 
@@ -198,22 +220,22 @@ void FMMMLayoutCustom::compute_coef(tlp::Graph *g) {
 	std::complex<float> z0(center->x(), center->y());
 	std::complex<float> zi;
 	std::complex<float> ziMinusz0Overk;
-	
 	std::vector<std::complex<float>> coefs;
-	unsigned int nbCoefs = m_pTerm + 1;
-	coefs.reserve(nbCoefs);
-	for (int i = 0; i < nbCoefs; i++)
-		coefs.push_back(std::complex<float>(0, 0));
-	coefs[0] += g->numberOfNodes(); // a0
-
 	tlp::node v;
 	tlp::Vec3f pos;
+	unsigned int nbCoefs = m_pTerm + 1;
+
+	coefs.reserve(5);
+	for (unsigned int i = 0; i < nbCoefs; ++i)
+		coefs.push_back(std::complex<float>(0, 0));
+
+	coefs[0] += g->numberOfNodes(); // a0
+	
 	forEach(v, g->getNodes()) {
 		pos = result->getNodeValue(v);
 		zi = std::complex<float>(pos.x(), pos.y());
 		ziMinusz0Overk = zi - z0; 
-
-		for (int k = 1; k < nbCoefs; k++) {
+		for (unsigned int k = 1; k < nbCoefs; ++k) {
 			coefs[k] = -1.0f * ziMinusz0Overk / (float)k; // ak
 			ziMinusz0Overk *= ziMinusz0Overk; // next power
 		}
@@ -226,9 +248,20 @@ void FMMMLayoutCustom::compute_repl_forces(tlp::node n, tlp::Graph *g) {
 	tlp::Vec3f *center = static_cast<tlp::Vec3f*>(g->getAttribute("center")->value);
 	float *radius = static_cast<float*>(g->getAttribute("radius")->value);
 	tlp::Vec3f dist = result->getNodeValue(n) - *center;
-	if (dist.norm() > *radius) {
-		m_disp->setNodeValue(n, m_disp->getNodeValue(n) + dist * compute_repl_force(dist) * (float)g->numberOfNodes());
-
+	float dist_norm = dist.norm();
+	if (dist_norm > *radius) {
+		if (!m_multipoleExpansion) {
+			m_disp->setNodeValue(n, m_disp->getNodeValue(n) + dist * compute_repl_force(dist) * (float)g->numberOfNodes());
+		} else {
+			std::vector<std::complex<float>> *coefs = reinterpret_cast<std::vector<std::complex<float>> *>(g->getAttribute("coefs")->value);
+			std::complex<float> zMinusz0 = std::complex<float>(result->getNodeValue(n).x(), result->getNodeValue(n).y()) - std::complex<float>(center->x(), center->y());
+			std::complex<float> potential = (*coefs)[0] / zMinusz0; 
+			for (unsigned int k = 1; k < m_pTerm + 1; ++k) {
+				zMinusz0 *= zMinusz0; // next power
+				potential += (float)k * (*coefs)[k] / zMinusz0;
+			}
+			m_disp->setNodeValue(n, m_disp->getNodeValue(n) + (dist / dist_norm) * tlp::Vec3f(potential.real(), -potential.imag()));
+		}
 	} else {
 		if (g->numberOfSubGraphs() == 0) { // leaf case 
 			tlp::node v;

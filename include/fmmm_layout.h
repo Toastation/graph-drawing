@@ -17,6 +17,7 @@ private:
 	bool m_cstTemp;								// Whether or not the annealing temperature is constant
 	bool m_cstInitTemp;							// Whether or not the initial annealing temperature is predefined. If false, it is the the initial temperature is sqrt(|V|) 
 	bool m_condition;							// Whether or not to block certain nodes.
+	bool m_multipoleExpansion;
 	float m_L;									// Ideal edge length
 	float m_Kr;									// Repulsive force constant
 	float m_Ks;									// Spring force constant
@@ -70,8 +71,8 @@ private:
 		float dist_norm = dist.norm();
 		if (dist_norm == 0) // push the nodes apart slightly 
 			return ((float) std::rand()) / (float) RAND_MAX;;
-		// return m_Kr / (dist_norm * dist_norm * dist_norm);
-		return 512*8 / (dist_norm * dist_norm * dist_norm);
+		return m_Kr / (dist_norm * dist_norm * dist_norm);
+		// return 512*8 / (dist_norm * dist_norm * dist_norm);
 	}
 
 	/**
@@ -83,8 +84,8 @@ private:
 		float dist_norm = dist.norm();
 		if (dist_norm == 0) // push the nodes apart slightly 
 			return ((float) std::rand()) / (float) RAND_MAX;;
-		// return m_Ks * (dist_norm - m_L) / dist_norm;
-		return dist_norm * std::log(dist_norm / 0.704*8);
+		return m_Ks * (dist_norm - m_L) / dist_norm;
+		// return dist_norm * std::log(dist_norm / 0.704*8);
 	}
 
 	/**

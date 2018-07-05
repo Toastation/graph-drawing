@@ -4,7 +4,7 @@ lib_dir="C:/Program Files/Tulip-5.1.0/bin/"
 include_dir_tulip="C:/Program Files/Tulip-5.1.0/include/"
 include_dir_ogdf=C:/Users/Melvin.Melvin-PC/Desktop/work/ogdf/include/
 include_dir=../include/
-build_dir=../bin/
+build_dir="C:/Program Files/Tulip-5.1.0/lib/tulip/"
 
 all: main
 
