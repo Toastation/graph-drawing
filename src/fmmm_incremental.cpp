@@ -1,7 +1,7 @@
 #define _USE_MATH_DEFINES
 
-#include <fmmm_incremental.h>
-#include <util.h>
+#include "fmmm_incremental.h"
+#include "util.h"
 
 #include <tulip/ForEach.h>
 #include <tulip/BooleanProperty.h>

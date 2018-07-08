@@ -107,20 +107,22 @@ class FMMMIncremental:
             sg = root.addCloneSubGraph("timeline_0")
             previous_pos = sg.getLayoutProperty("previousPos")
             previous_pos.copy(sg.getLayoutProperty("viewLayout"))
-            self._static.run(sg, multilevel)
+            # self._static.run(sg, multilevel)
+            ds = tlp.getDefaultPluginParameters("FM^3 (custom)", sg)
+            sg.applyLayoutAlgorithm("FM^3 (custom)", ds)
             result = sg.getLayoutProperty("result")
             layout = sg.getLayoutProperty("viewLayout")
             result.copy(layout)
             layout.copy(previous_pos)
             morph(sg)
-            # ds = tlp.getDefaultPluginParameters("GEM (Frick)", sg)
-            # sg.applyLayoutAlgorithm("GEM (Frick)", ds)
         elif len(subgraphs) == 1:
             # ds = tlp.getDefaultPluginParameters("GEM (Frick)", subgraphs[0])
             # subgraphs[0].applyLayoutAlgorithm("GEM (Frick)", ds)
             previous_pos = subgraphs[0].getLayoutProperty("previousPos")
             previous_pos.copy(subgraphs[0].getLayoutProperty("viewLayout"))
-            self._static.run(subgraphs[0], multilevel)
+            # self._static.run(subgraphs[0], multilevel)
+            ds = tlp.getDefaultPluginParameters("FM^3 (custom)", subgraphs[0])
+            subgraphs[0].applyLayoutAlgorithm("FM^3 (custom)", ds)
             result = subgraphs[0].getLayoutProperty("result")
             layout = subgraphs[0].getLayoutProperty("viewLayout")
             result.copy(layout)
@@ -136,15 +138,11 @@ class FMMMIncremental:
             if multilevel:
                 self._multilevel.run(new_graph)
             else:
-                # ds = tlp.getDefaultPluginParameters("GEM (Frick)", new_graph)
-                # ds["initial layout"] = new_graph.getLayoutProperty("viewLayout")
-                # canMove = new_graph.getBooleanProperty("canMove")
-                # canMoveCompl = new_graph.getBooleanProperty("canMoveCompl")
-                # for n in graph.getNodes():
-                #     canMoveCompl[n] = not canMove[n]
-                # ds["unmovables nodes"] = canMoveCompl
-                # subgraphs[0].applyLayoutAlgorithm("GEM (Frick)", ds)
-                self._layout.run(new_graph, self._iterations, new_graph.getBooleanProperty("canMove"))
+                #self._layout.run(new_graph, self._iterations, new_graph.getBooleanProperty("canMove"))
+                ds = tlp.getDefaultPluginParameters("FM^3 (custom)", new_graph)
+                ds["block nodes"] = True
+                ds["movable nodes"] = new_graph.getBooleanProperty("canMove")
+                new_graph.applyLayoutAlgorithm("FM^3 (custom)", ds)
             result = new_graph.getLayoutProperty("result")
             layout = new_graph.getLayoutProperty("viewLayout")
             result.copy(layout)

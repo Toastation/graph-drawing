@@ -7,7 +7,7 @@
 
 class FMMMLayoutCustom : public tlp::LayoutAlgorithm {
 public:
-	PLUGININFORMATION("FM^3 (custom)", "Melvin EVEN", "--", "--", "--", "Force Directed")
+	PLUGININFORMATION("FM^3 (custom)", "Melvin EVEN", "07/2018", "--", "1.0", "Force Directed")
 	FMMMLayoutCustom(const tlp::PluginContext *context);
 	~FMMMLayoutCustom() override;
 	bool check(std::string &errorMessage) override;
@@ -17,7 +17,9 @@ private:
 	bool m_cstTemp;								// Whether or not the annealing temperature is constant
 	bool m_cstInitTemp;							// Whether or not the initial annealing temperature is predefined. If false, it is the the initial temperature is sqrt(|V|) 
 	bool m_condition;							// Whether or not to block certain nodes.
-	bool m_multipoleExpansion;
+	bool m_multipoleExpansion;					// Whether or not to use the multipole extension formula
+	bool m_linearMedian;						// If true, finds the median in linear time with introselect. If false, uses quicksort to find the median.
+	bool m_exactRepulsiveForces;				// If true, computes exact repulsives forces in O(|V|²), else computes the approximate forces in O(|V|log|v|)
 	float m_L;									// Ideal edge length
 	float m_Kr;									// Repulsive force constant
 	float m_Ks;									// Spring force constant
@@ -60,7 +62,7 @@ private:
 	 * @brief Computes the repulsives forces that the node is subect to
 	 * @param n The node on which to compute the forces
 	 */
-	void compute_repl_forces(tlp::node n, tlp::Graph *g);
+	void compute_repl_forces(tlp::node &n, tlp::Graph *g);
 
 	/**
 	 * @brief Computes the repulsive force between two nodes
@@ -71,8 +73,8 @@ private:
 		float dist_norm = dist.norm();
 		if (dist_norm == 0) // push the nodes apart slightly 
 			return ((float) std::rand()) / (float) RAND_MAX;;
-		return m_Kr / (dist_norm * dist_norm * dist_norm);
-		// return 512*8 / (dist_norm * dist_norm * dist_norm);
+		// return m_Kr / (dist_norm * dist_norm * dist_norm);
+		return m_Kr / (dist_norm * dist_norm);
 	}
 
 	/**
@@ -84,8 +86,8 @@ private:
 		float dist_norm = dist.norm();
 		if (dist_norm == 0) // push the nodes apart slightly 
 			return ((float) std::rand()) / (float) RAND_MAX;;
-		return m_Ks * (dist_norm - m_L) / dist_norm;
-		// return dist_norm * std::log(dist_norm / 0.704*8);
+		// return m_Ks * (dist_norm - m_L) / dist_norm;
+		return m_Ks * dist_norm * std::log(dist_norm / m_L);
 	}
 
 	/**
