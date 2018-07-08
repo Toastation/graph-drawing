@@ -57,10 +57,14 @@ bool FMMMLayoutCustom::check(std::string &errorMessage) {
 		dataSet->get("block nodes", m_condition); 		
 		dataSet->get("movable nodes", m_canMove);
 	}
+	
 	result->copy(graph->getProperty<tlp::LayoutProperty>("viewLayout"));
 	m_disp = graph->getLocalProperty<tlp::LayoutProperty>("disp");
 	m_size = graph->getLocalProperty<tlp::SizeProperty>("viewSize");
 	m_rot = graph->getLocalProperty<tlp::DoubleProperty>("viewRotation");
+
+	result->setAllEdgeValue(std::vector<tlp::Vec3f>(0));
+
 	return true;
 }
 
