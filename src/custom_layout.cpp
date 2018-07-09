@@ -82,6 +82,11 @@ bool CustomLayout::check(std::string &errorMessage) {
 
 bool CustomLayout::run() {
 	tlp::BoundingBox bb = tlp::computeBoundingBox(graph, result, m_size, m_rot);
+	tlp::Vec3f dist;
+	tlp::node n;
+	tlp::node u;
+	tlp::node v;
+	tlp::edge e;
 	float t = m_cstInitTemp ? m_initTemp : std::max(std::min(bb.width(), bb.height()) * m_initTempFactor, 2 * m_L);
 	float init_temp = t;
 	float disp_norm;
@@ -89,11 +94,6 @@ bool CustomLayout::run() {
 	float avgDisp = 0;
 	bool quit = false;
 	unsigned int i = 1;
-	tlp::node n;
-	tlp::node u;
-	tlp::node v;
-	tlp::edge e;
-	tlp::Vec3f dist;
 
 	std::cout << "Init temp: " << t << std::endl;
 	std::string message = "Initial temperature: ";
@@ -101,9 +101,8 @@ bool CustomLayout::run() {
 	pluginProgress->setComment(message);
 	auto start = std::chrono::high_resolution_clock::now();
 	while (!quit) {
-		if (i <= 4 || i % 10 == 0) {
+		if (i <= 4 || i % 20 == 0) 
 			build_kd_tree();
-		}
 
 		forEach (n, graph->getNodes()) { // repulsive forces
 			if (!m_condition || m_canMove->getNodeValue(n))
@@ -164,7 +163,7 @@ bool CustomLayout::run() {
 	return true;
 }
 
-float CustomLayout::adaptative_cool(tlp::node &n) {
+float CustomLayout::adaptative_cool(const tlp::node &n) {
 	tlp::Vec3f a = m_disp->getNodeValue(n);
 	tlp::Vec3f b = m_dispPrev->getNodeValue(n);
 	float a_norm = a.norm();
@@ -330,7 +329,7 @@ void CustomLayout::compute_coef(tlp::Graph *g) {
 }
 
 
-void CustomLayout::compute_repl_forces(tlp::node &n, tlp::Graph *g) {
+void CustomLayout::compute_repl_forces(const tlp::node &n, tlp::Graph *g) {
 	tlp::Vec3f dist;
 	if (g->numberOfNodes() <= m_maxPartitionSize || g->numberOfSubGraphs() == 0) { // leaf node
 		tlp::node v;
@@ -342,7 +341,6 @@ void CustomLayout::compute_repl_forces(tlp::node &n, tlp::Graph *g) {
 		}
 		return;
 	}
-	
 
 	tlp::Vec3f *center = static_cast<tlp::Vec3f*>(g->getAttribute("center")->value);
 	float *radius = static_cast<float*>(g->getAttribute("radius")->value);

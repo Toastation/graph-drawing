@@ -5,6 +5,9 @@
 #include <tulip/TulipPluginHeaders.h>
 #include <tulip/BooleanProperty.h>
 
+#define forEachCustom(A, B)                                                                              \
+  for (tlp::_TLP_IT<decltype(A)> _it_foreach = B; tlp::_tlp_if_test(A, _it_foreach);)
+
 class CustomLayout : public tlp::LayoutAlgorithm {
 public:
 	PLUGININFORMATION("Custom Layout", "Melvin EVEN", "07/2018", "--", "1.0", "Force Directed")
@@ -35,7 +38,12 @@ private:
 	tlp::SizeProperty *m_size;					// viewSize
 	tlp::DoubleProperty *m_rot;					// viewRotation
 
-	float adaptative_cool(tlp::node &n);
+	/**
+	 * @brief 
+	 * @param n 
+	 * @return float 
+	 */
+	float adaptative_cool(const tlp::node &n);
 
 	/**
 	 * @brief Builds the next level of the 2d-tree
@@ -65,7 +73,7 @@ private:
 	 * @brief Computes the repulsives forces that the node is subect to
 	 * @param n The node on which to compute the forces
 	 */
-	void compute_repl_forces(tlp::node &n, tlp::Graph *g);
+	void compute_repl_forces(const tlp::node &n, tlp::Graph *g);
 
 	/**
 	 * @brief Computes the repulsive force between two nodes
@@ -91,24 +99,5 @@ private:
 			return ((float) std::rand()) / (float) RAND_MAX;;
 		// return m_Ks * (dist_norm - m_L) / dist_norm;
 		return m_Ks * dist_norm * std::log(dist_norm / m_L);
-	}
-
-	/**
-	 * @brief Computes the integral of the repulsive force between two nodes
-	 * @param dist The distance between nodes
-	 * @return float The integral of the repulsive force between two nodes
-	 */
-	float repl_force_integral(const tlp::Vec3f &dist) {
-		return -(m_Kr / dist.norm());
-	}
-
-	/**
-	 * @brief Computes the integral of the attractive force between two nodes
-	 * @param dist The distance between nodes
-	 * @return float The integral of the repulsive force between two nodes
-	 */
-	float attr_force_integral(const tlp::Vec3f &dist) {
-		float dist_norm = dist.norm();
-		return m_Ks * (((dist_norm * dist_norm) / 2) - (m_L * dist_norm));
 	}
 };
