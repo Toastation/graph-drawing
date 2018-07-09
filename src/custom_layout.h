@@ -5,11 +5,11 @@
 #include <tulip/TulipPluginHeaders.h>
 #include <tulip/BooleanProperty.h>
 
-class FMMMLayoutCustom : public tlp::LayoutAlgorithm {
+class CustomLayout : public tlp::LayoutAlgorithm {
 public:
-	PLUGININFORMATION("FM^3 (custom)", "Melvin EVEN", "07/2018", "--", "1.0", "Force Directed")
-	FMMMLayoutCustom(const tlp::PluginContext *context);
-	~FMMMLayoutCustom() override;
+	PLUGININFORMATION("Custom Layout", "Melvin EVEN", "07/2018", "--", "1.0", "Force Directed")
+	CustomLayout(const tlp::PluginContext *context);
+	~CustomLayout() override;
 	bool check(std::string &errorMessage) override;
 	bool run() override;
 
@@ -19,7 +19,7 @@ private:
 	bool m_condition;							// Whether or not to block certain nodes.
 	bool m_multipoleExpansion;					// Whether or not to use the multipole extension formula
 	bool m_linearMedian;						// If true, finds the median in linear time with introselect. If false, uses quicksort to find the median.
-	bool m_exactRepulsiveForces;				// If true, computes exact repulsives forces in O(|V|²), else computes the approximate forces in O(|V|log|v|)
+	bool m_adaptiveCooling;				
 	float m_L;									// Ideal edge length
 	float m_Kr;									// Repulsive force constant
 	float m_Ks;									// Spring force constant
@@ -31,8 +31,11 @@ private:
 	unsigned int m_pTerm;						// Number of term to compute in the p-term multipole expansion
 	tlp::BooleanProperty *m_canMove;			// Which nodes are able to move
 	tlp::LayoutProperty *m_disp;				// Displacement of each node
+	tlp::LayoutProperty *m_dispPrev;			// Displacement of each node during the previous iteration
 	tlp::SizeProperty *m_size;					// viewSize
 	tlp::DoubleProperty *m_rot;					// viewRotation
+
+	float adaptative_cool(tlp::node &n);
 
 	/**
 	 * @brief Builds the next level of the 2d-tree

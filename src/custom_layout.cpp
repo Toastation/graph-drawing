@@ -1,4 +1,6 @@
-#include "fmmm_layout.h"
+#define _USE_MATH_DEFINES
+
+#include "custom_layout.h"
 
 #include <tulip/BoundingBox.h>
 #include <tulip/DrawingTools.h>
@@ -29,29 +31,36 @@ const unsigned int DEFAULT_MAX_PARTITION_SIZE = 4;
 const unsigned int DEFAULT_PTERM = 4;
 const unsigned int DEFAUT_ITERATIONS = 300;
 
-PLUGIN(FMMMLayoutCustom)
+const float fPI_6 = M_PI / 6.0f;
+const float f2_PI_6 = 2.0f * fPI_6;
+const float f3_PI_6 = 3.0f * fPI_6;
+const float f4_PI_6 = 4.0f * fPI_6;
 
-FMMMLayoutCustom::FMMMLayoutCustom(const tlp::PluginContext *context) 
+
+PLUGIN(CustomLayout)
+
+CustomLayout::CustomLayout(const tlp::PluginContext *context) 
 	: LayoutAlgorithm(context), m_cstTemp(DEFAUT_CST_TEMP), m_cstInitTemp(DEFAUT_CST_INIT_TEMP), m_L(DEFAULT_L), m_Kr(DEFAULT_KR), m_Ks(DEFAULT_KS),
 	  m_initTemp(DEFAULT_INIT_TEMP), m_initTempFactor(DEFAULT_INIT_TEMP_FACTOR), m_coolingFactor(DEFAULT_COOLING_FACTOR), m_iterations(DEFAUT_ITERATIONS), 
 	  m_maxPartitionSize(DEFAULT_MAX_PARTITION_SIZE), m_pTerm(DEFAULT_PTERM) {
-	addInParameter<bool>("exact repl forces", "", "", false);
+	addInParameter<bool>("adaptive cooling", "", "", false);
 	addInParameter<bool>("linear median", "", "", false);
 	addInParameter<bool>("multipole expansion", "", "", false);
 	addInParameter<bool>("block nodes", "If true, only nodes in the set \"movable nodes\" will move.", "", false);
 	addInParameter<tlp::BooleanProperty>("movable nodes", "Set of nodes allowed to move. Only taken into account if \"blocked nodes\" is true", "", false);
 }
 
-FMMMLayoutCustom::~FMMMLayoutCustom() {
+CustomLayout::~CustomLayout() {
 
 }
 
-bool FMMMLayoutCustom::check(std::string &errorMessage) {
+bool CustomLayout::check(std::string &errorMessage) {
 	m_condition = false;
 	m_multipoleExpansion = false;
+	m_adaptiveCooling = false;
 
 	if (dataSet != nullptr) {
-		dataSet->get("exact forces", m_exactRepulsiveForces); 		
+		dataSet->get("adaptive cooling", m_adaptiveCooling); 		
 		dataSet->get("linear median", m_linearMedian); 		
 		dataSet->get("multipole expansion", m_multipoleExpansion); 		
 		dataSet->get("block nodes", m_condition); 		
@@ -60,18 +69,24 @@ bool FMMMLayoutCustom::check(std::string &errorMessage) {
 	
 	result->copy(graph->getProperty<tlp::LayoutProperty>("viewLayout"));
 	m_disp = graph->getLocalProperty<tlp::LayoutProperty>("disp");
+	m_dispPrev = graph->getLocalProperty<tlp::LayoutProperty>("dispPrev");
 	m_size = graph->getLocalProperty<tlp::SizeProperty>("viewSize");
 	m_rot = graph->getLocalProperty<tlp::DoubleProperty>("viewRotation");
-
+	
 	result->setAllEdgeValue(std::vector<tlp::Vec3f>(0));
-
+	m_disp->setAllNodeValue(tlp::Vec3f(0));
+	m_dispPrev->setAllNodeValue(tlp::Vec3f(0));
+	
 	return true;
 }
 
-bool FMMMLayoutCustom::run() {
+bool CustomLayout::run() {
 	tlp::BoundingBox bb = tlp::computeBoundingBox(graph, result, m_size, m_rot);
 	float t = m_cstInitTemp ? m_initTemp : std::max(std::min(bb.width(), bb.height()) * m_initTempFactor, 2 * m_L);
 	float init_temp = t;
+	float disp_norm;
+	float force;
+	float avgDisp = 0;
 	bool quit = false;
 	unsigned int i = 1;
 	tlp::node n;
@@ -79,9 +94,7 @@ bool FMMMLayoutCustom::run() {
 	tlp::node v;
 	tlp::edge e;
 	tlp::Vec3f dist;
-	float force;
-	float disp_norm;
-	
+
 	std::cout << "Init temp: " << t << std::endl;
 	std::string message = "Initial temperature: ";
 	message += std::to_string(init_temp);
@@ -92,12 +105,12 @@ bool FMMMLayoutCustom::run() {
 			build_kd_tree();
 		}
 
-		forEach (n, graph->getNodes()) {
+		forEach (n, graph->getNodes()) { // repulsive forces
 			if (!m_condition || m_canMove->getNodeValue(n))
 				compute_repl_forces(n, graph);
 		}
 
-		forEach (e, graph->getEdges()) {
+		forEach (e, graph->getEdges()) { // attractive forces
 			u = graph->source(e);
 			v = graph->target(e);
 			dist = result->getNodeValue(u) - result->getNodeValue(v);
@@ -108,16 +121,27 @@ bool FMMMLayoutCustom::run() {
 				m_disp->setNodeValue(v, m_disp->getNodeValue(v) + dist * force);
 		}
 
-		forEach (n, graph->getNodes()) {
+		forEach (n, graph->getNodes()) { // update positions
 			disp_norm = m_disp->getNodeValue(n).norm();
-			if (disp_norm != 0 && t < disp_norm) 
-				m_disp->setNodeValue(n, (m_disp->getNodeValue(n) / disp_norm) * t);
+			
+			if (disp_norm != 0) {  
+				if (m_adaptiveCooling) {
+					m_disp->setNodeValue(n, (m_disp->getNodeValue(n) / disp_norm) * std::min(adaptative_cool(n), 200.0f));
+				} else if (!m_adaptiveCooling && t < disp_norm) {
+					m_disp->setNodeValue(n, (m_disp->getNodeValue(n) / disp_norm) * t);
+				}				
+			}
+
+			avgDisp += disp_norm;
 			result->setNodeValue(n, result->getNodeValue(n) + m_disp->getNodeValue(n));
+			m_dispPrev->setNodeValue(n, m_disp->getNodeValue(n));
 			m_disp->setNodeValue(n, tlp::Vec3f());
 		}
 
-		if (!m_cstTemp)
+		if (!m_adaptiveCooling && !m_cstTemp)
 			t *= m_coolingFactor;
+
+		avgDisp = 0;
 
 		quit = i >= m_iterations || quit;
 		++i;
@@ -138,6 +162,32 @@ bool FMMMLayoutCustom::run() {
 	}
 
 	return true;
+}
+
+float CustomLayout::adaptative_cool(tlp::node &n) {
+	tlp::Vec3f a = m_disp->getNodeValue(n);
+	tlp::Vec3f b = m_dispPrev->getNodeValue(n);
+	float a_norm = a.norm();
+	float b_norm = b.norm();
+	float angle = std::atan2(a.x() * b.y() - a.y() * b.x(), a.x() * b.x() + a.y() * b.y()); // atan2f(det, dot)
+	float c;
+
+	if (-fPI_6 <= angle && angle <= fPI_6)
+		c = 2;
+	else if ((fPI_6 < angle && angle <= f2_PI_6) || (-f2_PI_6 <= angle && angle < -fPI_6))
+		c = 3.0f / 2;
+	else if ((f2_PI_6 < angle && angle <= f3_PI_6) || (-f3_PI_6 <= angle && angle < -f2_PI_6))
+		c = 1;
+	else if ((f3_PI_6 < angle && angle <= f4_PI_6) || (-f4_PI_6 <= angle && angle < -f3_PI_6))
+		c = 2.0f / 3;
+	else
+		c = 1.0f / 3; 
+
+	float res = c * b_norm;
+	if (a_norm > res && res > 0)
+		return res;
+	else 
+		return a_norm;
 }
 
 //===================================
@@ -164,7 +214,7 @@ tlp::Graph* inducedSubGraphCustom(std::vector<tlp::node>::iterator begin, std::v
 }
 //===================================
 
-void FMMMLayoutCustom::build_tree_aux(tlp::Graph *g, unsigned int level) {
+void CustomLayout::build_tree_aux(tlp::Graph *g, unsigned int level) {
 	std::vector<tlp::node> nodes = g->nodes(); // TODO: find a way to not copy the vector each time...
 	
 	int medianIndex = nodes.size() / 2;
@@ -209,17 +259,17 @@ void FMMMLayoutCustom::build_tree_aux(tlp::Graph *g, unsigned int level) {
 	leftSubgraph->setAttribute<float>("radius", boundingRadiusLeft.first.dist(boundingRadiusLeft.second));
 	rightSubgraph->setAttribute<float>("radius", boundingRadiusRight.first.dist(boundingRadiusRight.second));
 
-	tlp::ColorProperty *leftColor = leftSubgraph->getProperty<tlp::ColorProperty>("viewColor");
-	tlp::ColorProperty *rightColor = leftSubgraph->getProperty<tlp::ColorProperty>("viewColor");
-	tlp::node n;
-	tlp::Color color(std::rand() % 255, std::rand() % 255, std::rand() % 255);
-	forEach (n, leftSubgraph->getNodes()) {
-		leftColor->setNodeValue(n, color);
-	}
-	color = tlp::Color(std::rand() % 255, std::rand() % 255, std::rand() % 255);
-	forEach (n, rightSubgraph->getNodes()) {
-		rightColor->setNodeValue(n, color);		
-	}
+	// tlp::ColorProperty *leftColor = leftSubgraph->getProperty<tlp::ColorProperty>("viewColor");
+	// tlp::ColorProperty *rightColor = leftSubgraph->getProperty<tlp::ColorProperty>("viewColor");
+	// tlp::node n;
+	// tlp::Color color(std::rand() % 255, std::rand() % 255, std::rand() % 255);
+	// forEach (n, leftSubgraph->getNodes()) {
+	// 	leftColor->setNodeValue(n, color);
+	// }
+	// color = tlp::Color(std::rand() % 255, std::rand() % 255, std::rand() % 255);
+	// forEach (n, rightSubgraph->getNodes()) {
+	// 	rightColor->setNodeValue(n, color);		
+	// }
 
 	if (m_multipoleExpansion) {
 		compute_coef(leftSubgraph);
@@ -228,12 +278,13 @@ void FMMMLayoutCustom::build_tree_aux(tlp::Graph *g, unsigned int level) {
 
 	if (std::min(leftSubgraph->numberOfNodes(), rightSubgraph->numberOfNodes()) <= m_maxPartitionSize)
 		return;
+
 	build_tree_aux(leftSubgraph, level + 1);
 	build_tree_aux(rightSubgraph, level + 1);
 }
 
 
-void FMMMLayoutCustom::build_kd_tree() {
+void CustomLayout::build_kd_tree() {
 	if (graph->numberOfNodes() <= m_maxPartitionSize) return;
 	std::pair<tlp::Coord, tlp::Coord> boundingRadius = tlp::computeBoundingRadius(graph, result, m_size, m_rot);
 	graph->setAttribute<tlp::Vec3f>("center", boundingRadius.first);
@@ -250,7 +301,7 @@ void FMMMLayoutCustom::build_kd_tree() {
 	build_tree_aux(graph,  0);
 }
 
-void FMMMLayoutCustom::compute_coef(tlp::Graph *g) {
+void CustomLayout::compute_coef(tlp::Graph *g) {
 	tlp::Vec3f *center = static_cast<tlp::Vec3f*>(g->getAttribute("center")->value);	
 	std::complex<float> z0(center->x(), center->y());
 	std::complex<float> zi;
@@ -279,7 +330,7 @@ void FMMMLayoutCustom::compute_coef(tlp::Graph *g) {
 }
 
 
-void FMMMLayoutCustom::compute_repl_forces(tlp::node &n, tlp::Graph *g) {
+void CustomLayout::compute_repl_forces(tlp::node &n, tlp::Graph *g) {
 	tlp::Vec3f dist;
 	if (g->numberOfNodes() <= m_maxPartitionSize || g->numberOfSubGraphs() == 0) { // leaf node
 		tlp::node v;
