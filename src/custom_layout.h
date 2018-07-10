@@ -73,7 +73,7 @@ private:
 	 * @brief Computes the repulsives forces that the node is subect to
 	 * @param n The node on which to compute the forces
 	 */
-	void compute_repl_forces(const tlp::node *n, tlp::Graph *g);
+	void compute_repl_forces(const tlp::node &n, tlp::Graph *g);
 
 	/**
 	 * @brief Computes the repulsive force between two nodes
