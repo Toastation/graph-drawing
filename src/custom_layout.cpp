@@ -43,6 +43,7 @@ CustomLayout::CustomLayout(const tlp::PluginContext *context)
 	: LayoutAlgorithm(context), m_cstTemp(DEFAUT_CST_TEMP), m_cstInitTemp(DEFAUT_CST_INIT_TEMP), m_L(DEFAULT_L), m_Kr(DEFAULT_KR), m_Ks(DEFAULT_KS),
 	  m_initTemp(DEFAULT_INIT_TEMP), m_initTempFactor(DEFAULT_INIT_TEMP_FACTOR), m_coolingFactor(DEFAULT_COOLING_FACTOR), m_iterations(DEFAUT_ITERATIONS), 
 	  m_maxPartitionSize(DEFAULT_MAX_PARTITION_SIZE), m_pTerm(DEFAULT_PTERM) {
+	addInParameter<unsigned int>("iterations", "", "300", false);
 	addInParameter<bool>("adaptive cooling", "", "", false);
 	addInParameter<bool>("linear median", "", "", false);
 	addInParameter<bool>("multipole expansion", "", "", false);
@@ -57,10 +58,31 @@ CustomLayout::~CustomLayout() {
 bool CustomLayout::check(std::string &errorMessage) {
 	m_condition = false;
 	m_multipoleExpansion = false;
+	m_linearMedian = false;
 	m_adaptiveCooling = false;
 
+	bool btemp = false;
+	int itemp = 0;
+	tlp::BooleanProperty *temp;
+
 	if (dataSet != nullptr) {
-		dataSet->get("adaptive cooling", m_adaptiveCooling); 		
+		if (dataSet->get("iterations", itemp))
+			m_iterations = itemp;
+		if (dataSet->get("adaptive cooling", btemp))
+			m_adaptiveCooling = btemp;
+		if (dataSet->get("linear median", btemp))
+			m_linearMedian = btemp;
+		if (dataSet->get("multipole expansion", btemp))
+			m_multipoleExpansion = btemp;
+		if (dataSet->get("block nodes", btemp))
+			m_condition = btemp;
+		if (dataSet->get("movable nodes", temp))
+			m_canMove = temp;
+		else if (m_condition) {
+			pluginProgress->setError("\"block nodes\" parameter is true but no BooleanProperty was given. Check parameter \"movable nodes\"");
+			return false;
+		}
+
 		dataSet->get("linear median", m_linearMedian); 		
 		dataSet->get("multipole expansion", m_multipoleExpansion); 		
 		dataSet->get("block nodes", m_condition); 		
@@ -106,7 +128,7 @@ bool CustomLayout::run() {
 
 		forEach (n, graph->getNodes()) { // repulsive forces
 			if (!m_condition || m_canMove->getNodeValue(n))
-				compute_repl_forces(n, graph);
+				compute_repl_forces(&n, graph);
 		}
 
 		forEach (e, graph->getEdges()) { // attractive forces
@@ -220,12 +242,12 @@ void CustomLayout::build_tree_aux(tlp::Graph *g, unsigned int level) {
 	auto medianIt = nodes.begin() + medianIndex;
 
 	if (level % 2 == 0) {
-		if (m_linearMedian) { // uses 
-			std::nth_element(nodes.begin(), medianIt, nodes.end(), [this](tlp::node &a, tlp::node &b) { // finding x-axis median
+		if (m_linearMedian) { 
+			std::nth_element(nodes.begin(), medianIt, nodes.end(), [this](tlp::node &a, tlp::node &b) { 
 				return result->getNodeValue(a).x() < result->getNodeValue(b).x();
 			});
 			int medianX = result->getNodeValue(nodes[medianIndex]).x();
-			std::partition(nodes.begin(), nodes.end(), [this, &medianX](tlp::node &a) {
+			std::partition(nodes.begin(), nodes.end(), [this, &medianX](tlp::node &a) { 
 				return result->getNodeValue(a).x() < medianX;
 			});
 		} else {
@@ -235,11 +257,11 @@ void CustomLayout::build_tree_aux(tlp::Graph *g, unsigned int level) {
 		}
 	} else {
 		if (m_linearMedian) {
-			std::nth_element(nodes.begin(), nodes.begin() + medianIndex, nodes.end(), [this](tlp::node a, tlp::node b) { // finding y-axis median
+			std::nth_element(nodes.begin(), nodes.begin() + medianIndex, nodes.end(), [this](tlp::node a, tlp::node b) {
 				return result->getNodeValue(a).y() < result->getNodeValue(b).y();
 			});
 			int medianY = result->getNodeValue(nodes[medianIndex]).y();
-			std::partition(nodes.begin(), nodes.end(), [this, &medianY](tlp::node &a) {
+			std::partition(nodes.begin(), nodes.end(), [this, &medianY](tlp::node &a) { 
 				return result->getNodeValue(a).y() < medianY;
 			});
 		} else {
@@ -329,14 +351,14 @@ void CustomLayout::compute_coef(tlp::Graph *g) {
 }
 
 
-void CustomLayout::compute_repl_forces(const tlp::node &n, tlp::Graph *g) {
+void CustomLayout::compute_repl_forces(const tlp::node *n, tlp::Graph *g) {
 	tlp::Vec3f dist;
 	if (g->numberOfNodes() <= m_maxPartitionSize || g->numberOfSubGraphs() == 0) { // leaf node
 		tlp::node v;
 		forEach (v, g->getNodes()) {
-			if (v != n) {
-				dist = result->getNodeValue(n) - result->getNodeValue(v);
-				m_disp->setNodeValue(n, m_disp->getNodeValue(n) + dist * compute_repl_force(dist));
+			if (v != *n) {
+				dist = result->getNodeValue(*n) - result->getNodeValue(v);
+				m_disp->setNodeValue(*n, m_disp->getNodeValue(*n) + dist * compute_repl_force(dist));
 			}
 		}
 		return;
@@ -350,20 +372,20 @@ void CustomLayout::compute_repl_forces(const tlp::node &n, tlp::Graph *g) {
 		return;
 	}
 
-	dist = result->getNodeValue(n) - *center;
+	dist = result->getNodeValue(*n) - *center;
 	float dist_norm = dist.norm();
 	if (dist_norm > *radius) { // internal node, approximation
 		if (!m_multipoleExpansion) {
-			m_disp->setNodeValue(n, m_disp->getNodeValue(n) + dist * compute_repl_force(dist) * (float)g->numberOfNodes());
+			m_disp->setNodeValue(*n, m_disp->getNodeValue(*n) + dist * compute_repl_force(dist) * (float)g->numberOfNodes());
 		} else {
 			std::vector<std::complex<float>> *coefs = reinterpret_cast<std::vector<std::complex<float>> *>(g->getAttribute("coefs")->value);
-			std::complex<float> zMinusz0 = std::complex<float>(result->getNodeValue(n).x(), result->getNodeValue(n).y()) - std::complex<float>(center->x(), center->y());
+			std::complex<float> zMinusz0 = std::complex<float>(result->getNodeValue(*n).x(), result->getNodeValue(*n).y()) - std::complex<float>(center->x(), center->y());
 			std::complex<float> potential = (*coefs)[0] / zMinusz0; 
 			for (unsigned int k = 1; k < m_pTerm + 1; ++k) {
 				zMinusz0 *= zMinusz0; // next power
 				potential += (float)k * (*coefs)[k] / zMinusz0;
 			}
-			m_disp->setNodeValue(n, m_disp->getNodeValue(n) + (dist / dist_norm) * tlp::Vec3f(potential.real(), -potential.imag()));
+			m_disp->setNodeValue(*n, m_disp->getNodeValue(*n) + (dist / dist_norm) * tlp::Vec3f(potential.real(), -potential.imag()));
 		}
 	} else { // internal node, continue
 		tlp::Graph *sg;
