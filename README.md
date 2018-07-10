@@ -1,5 +1,10 @@
+### Prerequisites
+You first need to compile the static layout algorithm. Place the files ```src/custom_layout.cpp``` and ```src/custom_layout.h``` in the externalplugins directory of the tulip sources, and recompile.
+
+---
+
 ### How to use:
-To draw the latest graph in the timeline, run ```scripts/fmmm_incremental.py``` on the root graph.
+Run ```scripts/fmmm_incremental.py``` on the root graph to compute the layout of the last graph of the timeline.
 
 ---
 
