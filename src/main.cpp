@@ -10,8 +10,8 @@
 int main() {
     tlp::initTulipLib();
     
-    std::ofstream out("out.txt");
-    std::cout.rdbuf(out.rdbuf());
+    // std::ofstream out("out.txt");
+    // std::cout.rdbuf(out.rdbuf());
 
     tlp::Graph *graph = tlp::loadGraph("C:/Users/Melvin.Melvin-PC/Desktop/work/graph-drawing/graphs/other/n300.json");
 

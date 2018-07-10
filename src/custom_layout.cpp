@@ -17,7 +17,6 @@
 #include <algorithm>
 #include <chrono>
 #include <complex>
-#include <functional>
 
 const bool DEFAUT_CST_TEMP = false;
 const bool DEFAUT_CST_INIT_TEMP = false;
@@ -49,6 +48,7 @@ CustomLayout::CustomLayout(const tlp::PluginContext *context)
 	addInParameter<bool>("multipole expansion", "", "", false);
 	addInParameter<bool>("block nodes", "If true, only nodes in the set \"movable nodes\" will move.", "", false);
 	addInParameter<tlp::BooleanProperty>("movable nodes", "Set of nodes allowed to move. Only taken into account if \"blocked nodes\" is true", "", false);
+	addDependency("Connected Component Packing", "1.0");
 }
 
 CustomLayout::~CustomLayout() {
@@ -113,7 +113,7 @@ bool CustomLayout::run() {
 	float init_temp = t;
 	float disp_norm;
 	float force;
-	float avgDisp = 0;
+	// float avgDisp = 0;
 	bool quit = false;
 	unsigned int i = 1;
 
@@ -123,8 +123,9 @@ bool CustomLayout::run() {
 	pluginProgress->setComment(message);
 	auto start = std::chrono::high_resolution_clock::now();
 	while (!quit) {
-		if (i <= 4 || i % 20 == 0) 
+		if (i <= 4 || i % 4 == 0) { 
 			build_kd_tree();
+		}
 
 		forEach (n, graph->getNodes()) { // repulsive forces
 			if (!m_condition || m_canMove->getNodeValue(n))
@@ -153,7 +154,7 @@ bool CustomLayout::run() {
 				}				
 			}
 
-			avgDisp += disp_norm;
+			// avgDisp += disp_norm;
 			result->setNodeValue(n, result->getNodeValue(n) + m_disp->getNodeValue(n));
 			m_dispPrev->setNodeValue(n, m_disp->getNodeValue(n));
 			m_disp->setNodeValue(n, tlp::Vec3f());
@@ -162,7 +163,7 @@ bool CustomLayout::run() {
 		if (!m_adaptiveCooling && !m_cstTemp)
 			t *= m_coolingFactor;
 
-		avgDisp = 0;
+		// avgDisp = 0;
 
 		quit = i >= m_iterations || quit;
 		++i;
@@ -172,15 +173,26 @@ bool CustomLayout::run() {
 			break;
 		}
 	}
+
+	tlp::Graph *subgraph;
+	stableForEach (subgraph, graph->getSubGraphs()) { // delete last kd-tree
+		graph->delAllSubGraphs(subgraph);
+	}
+
+	if (!tlp::ConnectedTest::isConnected(graph)) { // pack connected components
+		std::string errorMessage;
+		tlp::LayoutProperty tmpLayout(graph);
+		tlp::DataSet ds;
+		ds.set("coordinates", result);
+		graph->applyPropertyAlgorithm("Connected Component Packing", &tmpLayout, errorMessage, pluginProgress, &ds);
+		*result = tmpLayout;
+		return true;
+	}
+
 	auto end = std::chrono::high_resolution_clock::now();
 	std::chrono::duration<double> elapsed = end - start;
 	std::cout << "elapsed: " << elapsed.count() << std::endl;
 	std::cout << "Iterations done: " << i  << std::endl;
-
-	tlp::Graph *subgraph;
-	stableForEach (subgraph, graph->getSubGraphs()) {
-		graph->delAllSubGraphs(subgraph);
-	}
 
 	return true;
 }
@@ -217,8 +229,9 @@ tlp::Graph* inducedSubGraphCustom(std::vector<tlp::node>::iterator begin, std::v
 		std::cerr << "parent graph must exist to create the induced subgraph" << std::endl;
 		return nullptr;
 	}
-
+	
 	tlp::Graph *result = parent->addSubGraph(name);
+	
 	for (auto it = begin; it != end; ++it) {
 		result->addNode(*it);
 	}
@@ -242,7 +255,7 @@ void CustomLayout::build_tree_aux(tlp::Graph *g, unsigned int level) {
 	auto medianIt = nodes.begin() + medianIndex;
 
 	if (level % 2 == 0) {
-		if (m_linearMedian) { 
+		if (m_linearMedian) { // find the median in linear time then rearrange the nodes around it 
 			std::nth_element(nodes.begin(), medianIt, nodes.end(), [this](tlp::node &a, tlp::node &b) { 
 				return result->getNodeValue(a).x() < result->getNodeValue(b).x();
 			});
@@ -250,12 +263,12 @@ void CustomLayout::build_tree_aux(tlp::Graph *g, unsigned int level) {
 			std::partition(nodes.begin(), nodes.end(), [this, &medianX](tlp::node &a) { 
 				return result->getNodeValue(a).x() < medianX;
 			});
-		} else {
+		} else { // sort the nodes in O(n*log(n)) to find the median
 			std::sort(nodes.begin(), nodes.end(), [this](tlp::node a, tlp::node b) {
 				return result->getNodeValue(a).x() < result->getNodeValue(b).x();
 			});
 		}
-	} else {
+	} else { // same on the y-axis
 		if (m_linearMedian) {
 			std::nth_element(nodes.begin(), nodes.begin() + medianIndex, nodes.end(), [this](tlp::node a, tlp::node b) {
 				return result->getNodeValue(a).y() < result->getNodeValue(b).y();
@@ -280,17 +293,17 @@ void CustomLayout::build_tree_aux(tlp::Graph *g, unsigned int level) {
 	leftSubgraph->setAttribute<float>("radius", boundingRadiusLeft.first.dist(boundingRadiusLeft.second));
 	rightSubgraph->setAttribute<float>("radius", boundingRadiusRight.first.dist(boundingRadiusRight.second));
 
-	// tlp::ColorProperty *leftColor = leftSubgraph->getProperty<tlp::ColorProperty>("viewColor");
-	// tlp::ColorProperty *rightColor = leftSubgraph->getProperty<tlp::ColorProperty>("viewColor");
-	// tlp::node n;
-	// tlp::Color color(std::rand() % 255, std::rand() % 255, std::rand() % 255);
-	// forEach (n, leftSubgraph->getNodes()) {
-	// 	leftColor->setNodeValue(n, color);
-	// }
-	// color = tlp::Color(std::rand() % 255, std::rand() % 255, std::rand() % 255);
-	// forEach (n, rightSubgraph->getNodes()) {
-	// 	rightColor->setNodeValue(n, color);		
-	// }
+	// // tlp::ColorProperty *leftColor = leftSubgraph->getProperty<tlp::ColorProperty>("viewColor");
+	// // tlp::ColorProperty *rightColor = leftSubgraph->getProperty<tlp::ColorProperty>("viewColor");
+	// // tlp::node n;
+	// // tlp::Color color(std::rand() % 255, std::rand() % 255, std::rand() % 255);
+	// // forEach (n, leftSubgraph->getNodes()) {
+	// // 	leftColor->setNodeValue(n, color);
+	// // }
+	// // color = tlp::Color(std::rand() % 255, std::rand() % 255, std::rand() % 255);
+	// // forEach (n, rightSubgraph->getNodes()) {
+	// // 	rightColor->setNodeValue(n, color);		
+	// // }
 
 	if (m_multipoleExpansion) {
 		compute_coef(leftSubgraph);
