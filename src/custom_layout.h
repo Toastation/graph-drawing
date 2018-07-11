@@ -107,7 +107,7 @@ private:
 	 * @param n 
 	 * @return float 
 	 */
-	float adaptative_cool(const tlp::node &n);
+	float adaptativeCool(const tlp::node &n);
 
 	/**
 	 * @brief Builds the next level of the 2d-tree
@@ -122,34 +122,34 @@ private:
 
 	tlp::Coord computeCenter(unsigned int start, unsigned int end);
 	float computeRadius(unsigned int start, unsigned int end, tlp::Coord center, const tlp::LayoutProperty *layout, const tlp::SizeProperty *size);
-	void build_kd_tree_aux(KNode *node, unsigned int level, bool refresh);
+	void buildKdTreeAux(KNode *node, unsigned int level, bool refresh);
 
 	/**
 	 * @brief Builds a 2d-tree from the plugin's graph. The tree is stored in the graph hierarchy,
 	 * the root node being the plugin's graph.
 	 * Vertices on the even levels of the tree are sorted horizontally, and vertically on the odd levels.
 	 */
-	KNode* build_kd_tree(bool refresh, KNode *root);
+	KNode* buildKdTree(bool refresh, KNode *root);
 
 	/**
 	 * @brief Computes the coefficients of the multipole expansion of the graph. Stores the result in
 	 * a graph attribute called "coefs" (std::vector<std::complex<float>>)
 	 * @param g The graph from which to compute the coefficients
 	 */
-	void compute_coef(tlp::Graph *g);
+	void computeCoef(tlp::Graph *g);
 
 	/**
 	 * @brief Computes the repulsives forces that the node is subect to
 	 * @param n The node on which to compute the forces
 	 */
-	void compute_repl_forces(const tlp::node &n, tlp::Graph *g);
+	void computeReplForces(const tlp::node &n, KNode *kdTree);
 
 	/**
 	 * @brief Computes the repulsive force between two nodes
 	 * @param dist The distance between nodes
 	 * @return float The magnitude of the force
 	 */
-	float compute_repl_force(const tlp::Vec3f &dist) {
+	float computeReplForce(const tlp::Vec3f &dist) {
 		float dist_norm = dist.norm();
 		if (dist_norm == 0) // push the nodes apart slightly 
 			return ((float) std::rand()) / (float) RAND_MAX;;
@@ -162,7 +162,7 @@ private:
 	 * @param dist The distance between nodes
 	 * @return float The magnitude of the force
 	 */
-	float compute_attr_force(const tlp::Vec3f &dist) {
+	float computeAttrForce(const tlp::Vec3f &dist) {
 		float dist_norm = dist.norm();
 		if (dist_norm == 0) // push the nodes apart slightly 
 			return ((float) std::rand()) / (float) RAND_MAX;;

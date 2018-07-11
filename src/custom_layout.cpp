@@ -35,6 +35,9 @@ const float f2_PI_6 = 2.0f * fPI_6;
 const float f3_PI_6 = 3.0f * fPI_6;
 const float f4_PI_6 = 4.0f * fPI_6;
 
+unsigned int approxCount = 0;
+unsigned int exactCount = 0;
+
 PLUGIN(CustomLayout)
 
 CustomLayout::CustomLayout(const tlp::PluginContext *context) 
@@ -110,7 +113,7 @@ bool CustomLayout::run() {
 
 	const std::vector<tlp::node> &nodes = graph->nodes();
 	m_nodesCopy = nodes;
-	KNode *kdTree = build_kd_tree(false, nullptr);
+	KNode *kdTree = buildKdTree(false, nullptr);
 	tlp::BoundingBox bb = tlp::computeBoundingBox(graph, result, m_size, m_rot);
 	tlp::node n;
 	tlp::node u;
@@ -131,20 +134,23 @@ bool CustomLayout::run() {
 	auto start = std::chrono::high_resolution_clock::now();
 	while (!quit) {
 		if (i <= 4 || i % 20 == 0) { 
-			build_kd_tree(true, kdTree);
+			buildKdTree(true, kdTree);
 		}
 
-		// forEach (n, graph->getNodes()) { // repulsive forces
-		// 	if (!m_condition || m_canMove->getNodeValue(n))
-		// 		compute_repl_forces(n, graph);
-		// }
+		for (auto n : m_nodesCopy) {
+			if (!m_condition || m_canMove->getNodeValue(n))
+				computeReplForces(n, kdTree);
+			std::cout << "aprox: " << approxCount << " | exact: " << exactCount << std::endl;
+			approxCount = 0;
+			exactCount = 0;
+		}
 
-		// compute attractive forces TODO: find a way to parallelize
+		// //compute attractive forces TODO: find a way to parallelize
 		// for (auto e : graph->edges()) { 
-		// 	u = graph->source(e);
-		// 	v = graph->target(e);
+		// 	const tlp::node &u = graph->source(e);
+		// 	const tlp::node &v = graph->target(e);
 		// 	tlp::Coord dist = result->getNodeValue(u) - result->getNodeValue(v);
-		// 	dist *= compute_attr_force(dist);
+		// 	dist *= computeAttrForce(dist);
 		// 	if (!m_condition || m_canMove->getNodeValue(u)) {
 		//  		m_disp[u] -= dist;
 		// 	}
@@ -243,7 +249,7 @@ float CustomLayout::computeRadius(unsigned int start, unsigned int end, tlp::Coo
 	return maxRad;
 }
 
-void CustomLayout::build_kd_tree_aux(KNode *node, unsigned int level, bool refresh) {
+void CustomLayout::buildKdTreeAux(KNode *node, unsigned int level, bool refresh) {
 	unsigned int medianIndex = (node->start + node->end) / 2;
 	auto medianIt = m_nodesCopy.begin() + medianIndex;
 	auto startIt = m_nodesCopy.begin() + node->start;
@@ -278,18 +284,31 @@ void CustomLayout::build_kd_tree_aux(KNode *node, unsigned int level, bool refre
 		node->leftChild = new KNode(node->start, medianIndex, leftRadius, leftCenter);
 		node->rightChild = new KNode(medianIndex, node->end, rightRadius, rightCenter);
 	}
+	
+	// tlp::ColorProperty *color = graph->getProperty<tlp::ColorProperty>("viewColor");
+	// tlp::node n;
+	// tlp::Color c(std::rand() % 255, std::rand() % 255, std::rand() % 255);
+	// for (unsigned int i = node->leftChild->start; i < node->leftChild->end; ++i) {
+	// 	color->setNodeValue(m_nodesCopy[i], c);
+	// }	
+	// c = tlp::Color(std::rand() % 255, std::rand() % 255, std::rand() % 255);
+	// for (unsigned int i = node->rightChild->start; i < node->rightChild->end; ++i) {
+	// 	color->setNodeValue(m_nodesCopy[i], c);
+	// }	
+
 	if (std::min(medianIndex - node->start, node->end - medianIndex) <= m_maxPartitionSize) return;
-	// #pragma omp task
-	build_kd_tree_aux(node->leftChild, level + 1, refresh);
-	// #pragma omp task	
-	build_kd_tree_aux(node->rightChild, level + 1, refresh);
+	#pragma omp task
+	buildKdTreeAux(node->leftChild, level + 1, refresh);
+	#pragma omp task	
+	buildKdTreeAux(node->rightChild, level + 1, refresh);
 }
 
-KNode* CustomLayout::build_kd_tree(bool refresh, KNode *root=nullptr) {
+KNode* CustomLayout::buildKdTree(bool refresh, KNode *root=nullptr) {
 	if (refresh && root == nullptr) {
-		std::cerr << "If refresh is set to true, you must provide a valid root node." << std::endl;
+		pluginProgress->setError("Refresh is true but root node is null in CustomLayout::buildKdTree");
 		return root;
 	}
+	
 	tlp::Coord center = computeCenter(0, m_nodesCopy.size());
 	float radius = computeRadius(0, m_nodesCopy.size(), center, result, m_size);
 	if (refresh) {
@@ -299,11 +318,65 @@ KNode* CustomLayout::build_kd_tree(bool refresh, KNode *root=nullptr) {
 		root = new KNode(0, m_nodesCopy.size(), radius, center);
 	}
 	
-	// #pragma omp parallel
-	// #pragma omp single
-	build_kd_tree_aux(root, 0, refresh);
+	#pragma omp parallel
+	#pragma omp single
+	buildKdTreeAux(root, 0, refresh);
 	return root;
 }
+
+void CustomLayout::computeReplForces(const tlp::node &n, KNode *kdTree) {
+	if (kdTree == nullptr) {
+		pluginProgress->setError("nullptr kdTree in CustomLayout::computeReplForces");
+		return;
+	}
+
+	// leaf node: compute the exact repulsive forces between n and the vertices contained in the leaf node
+	if (kdTree->leftChild == nullptr && kdTree->rightChild == nullptr) {
+		for (unsigned int i = kdTree->start; i < kdTree->end; ++i) {
+			const tlp::node &v = m_nodesCopy[i];
+			if (n != v) {
+				tlp::Coord dist = result->getNodeValue(n) - result->getNodeValue(v);
+				dist *= computeReplForce(dist);
+				m_disp[n] += dist;
+			}
+		}
+		++exactCount;
+		return;
+	}
+
+	tlp::Coord dist = result->getNodeValue(n) - kdTree->center;
+	float distNorm = dist.norm();
+	
+	// internal node: n is outside the partition represented by kdTree -> compute the approximate repulsive force 
+	// between n and the vertices contained by the kd-tree node 
+	if (distNorm > kdTree->radius) {
+		dist *= (kdTree->end - kdTree->start) * computeReplForce(dist);
+		m_disp[n] += dist;
+		++approxCount;		
+	}
+	// internal node: n is inside the partition represented by kdTree -> continue through the kd-tree 
+	else { 
+		computeReplForces(n, kdTree->leftChild);
+		computeReplForces(n, kdTree->rightChild);
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 // float CustomLayout::adaptative_cool(const tlp::node &n) {
 // 	tlp::Vec3f a = m_disp->getNodeValue(n);
