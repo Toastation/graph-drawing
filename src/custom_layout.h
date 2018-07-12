@@ -21,6 +21,7 @@ struct KNode {
 		: start(_start), end(_end), radius(_radius), center(_center) {
 		leftChild = nullptr;
 		rightChild = nullptr;
+		a0 = 0;
 	}
 
 	~KNode() {
@@ -32,7 +33,7 @@ struct KNode {
 	}
 
 	float depth() {
-		if (isLeaf())
+		if (isLeaf()) 
 			return 0;
 		return 1 + std::max(leftChild->depth(), rightChild->depth());
 	}
@@ -84,70 +85,86 @@ public:
 	bool run() override;
 
 private:
-	bool m_cstTemp;								// Whether or not the annealing temperature is constant
-	bool m_cstInitTemp;							// Whether or not the initial annealing temperature is predefined. If false, it is the the initial temperature is sqrt(|V|) 
-	bool m_condition;							// Whether or not to block certain nodes.
-	bool m_multipoleExpansion;					// Whether or not to use the multipole extension formula
-	bool m_linearMedian;						// If true, finds the median in linear time with introselect. If false, uses quicksort to find the median.
-	bool m_adaptiveCooling;				
-	float m_L;									// Ideal edge length
-	float m_Kr;									// Repulsive force constant
-	float m_Ks;									// Spring force constant
-	float m_initTemp;							// Initial annealing temperature (if m_cstInitTemp is true)
-	float m_initTempFactor;						// Factor to apply on the initial annealing temperature (if m_cstInitTemp is false)
-	float m_coolingFactor;						// Cooling rate of the annealing temperature
-	unsigned int m_iterations;					// Number of iterations
-	unsigned int m_maxPartitionSize;			// Maximum number of nodes of the smallest partition of the graph (via KD-tree)
-	unsigned int m_pTerm;						// Number of term to compute in the p-term multipole expansion
-	tlp::BooleanProperty *m_canMove;			// Which nodes are able to move
-	tlp::SizeProperty *m_size;					// viewSize
-	tlp::DoubleProperty *m_rot;					// viewRotation
-	std::vector<tlp::node> m_nodesCopy;
-	TLP_HASH_MAP<tlp::node, tlp::Coord> m_disp;
-	TLP_HASH_MAP<tlp::node, tlp::Coord> m_dispPrev;
-	TLP_HASH_MAP<tlp::node, tlp::Coord> m_pos;
+	bool m_cstTemp; // Whether or not the annealing temperature is constant
+	bool m_cstInitTemp; // Whether or not the initial annealing temperature is predefined. If false, it is the the initial temperature is sqrt(|V|) 
+	bool m_condition; // Whether or not to block certain nodes.
+	bool m_multipoleExpansion; // Whether or not to use the multipole extension formula
+	bool m_linearMedian; // If true, finds the median in linear time with introselect. If false, uses quicksort to find the median.
+	bool m_adaptiveCooling; //
+	float m_L; // Ideal edge length
+	float m_Kr; // Repulsive force constant
+	float m_Ks; // Spring force constant
+	float m_initTemp; // Initial annealing temperature (if m_cstInitTemp is true)
+	float m_initTempFactor; // Factor to apply on the initial annealing temperature (if m_cstInitTemp is false)
+	float m_coolingFactor; // Cooling rate of the annealing temperature
+	float m_temp;
+	unsigned int m_iterations; // Number of iterations
+	unsigned int m_maxPartitionSize; // Maximum number of nodes of the smallest partition of the graph (via KD-tree)
+	unsigned int m_pTerm; // Number of term to compute in the p-term multipole expansion
+	tlp::BooleanProperty *m_canMove; // Which nodes are able to move during the algorithm
+	tlp::SizeProperty *m_size; // viewSize
+	tlp::DoubleProperty *m_rot;	// viewRotation
+	std::vector<tlp::node> m_nodesCopy; // Copy of the graph's nodes, /!\ the order is NOT fixed
+	TLP_HASH_MAP<tlp::node, tlp::Coord> m_disp; // Displacement of each node
+	TLP_HASH_MAP<tlp::node, tlp::Coord> m_dispPrev; // Displacement of each during the previous iteration
+	TLP_HASH_MAP<tlp::node, tlp::Coord> m_pos; // Current position of each node
 
+	/**
+	 * @brief Prepares the algo (initialises hashmaps, etc) 
+	 */
 	void init();
 
 	/**
-	 * @brief 
-	 * @param n 
-	 * @return float 
+	 * @brief Computes local temperature for each node 
+	 * @param n The node to compute the local temperature from
+	 * @return float The local temperature of the node
 	 */
 	float adaptativeCool(const tlp::node &n);
 
 	/**
-	 * @brief Builds the next level of the 2d-tree
-	 * @param g The graph to split
-	 * @param pos The positions of the nodes (from the root node of the tree)
-	 * @param size The sizes of the nodes (from the root node of the tree)
-	 * @param rot The rotations of the nodes (from the root node of the tree)
-	 * @param level The current depth of the tree
+	 * @brief Computes the center of the circle circumscribing the set of vertices m_nodesCopy[start...end]
+	 * @param start The start index of the set
+	 * @param end The end index of the set
+	 * @return tlp::Coord The center of the circle circumscribing the set of vertices m_nodesCopy[start...end]
 	 */
-	void build_tree_aux(tlp::Graph *g, unsigned int level);
-
-
 	tlp::Coord computeCenter(unsigned int start, unsigned int end);
-	float computeRadius(unsigned int start, unsigned int end, tlp::Coord center, const tlp::LayoutProperty *layout, const tlp::SizeProperty *size);
+
+	/**
+	 * @brief Computes the radius of the circle circumscribing the set of vertices m_nodesCopy[start...end]
+	 * @param start The start index of the set
+	 * @param end The end index of the set
+	 * @param center The center coordinate of the set of nodes
+	 * @return float The radius of the circle circumscribing the set of vertices m_nodesCopy[start...end]
+	 */
+	float computeRadius(unsigned int start, unsigned int end, tlp::Coord center);
+
+	/**
+	 * @brief Auxiliary function of buildKdTree.
+	 * @param node The kd-tree node to build
+	 * @param level Node's depth in the kd-tree. The depth of the root node is 0.
+	 * @param refresh Whether or not to create or refresh the tree.
+	 */
 	void buildKdTreeAux(KNode *node, unsigned int level, bool refresh);
 
 	/**
-	 * @brief Builds a 2d-tree from the plugin's graph. The tree is stored in the graph hierarchy,
+	 * @brief Builds a 2d-tree from the plugin's graph. The tree is stored in the graph hierarchy. Wrapper function of buildKdTreeAux.
 	 * the root node being the plugin's graph.
 	 * Vertices on the even levels of the tree are sorted horizontally, and vertically on the odd levels.
+	 * @param refresh Whether or not to create or refresh the tree
+	 * @param root If refresh is true, this is the tree that will be refreshed
 	 */
 	KNode* buildKdTree(bool refresh, KNode *root);
 
 	/**
-	 * @brief Computes the coefficients of the multipole expansion of the graph. Stores the result in
-	 * a graph attribute called "coefs" (std::vector<std::complex<float>>)
-	 * @param g The graph from which to compute the coefficients
+	 * @brief Computes the coefficients of the multipole expansion of the graph.
+	 * @param node The node of the kd-tree on which to compute the coefficients.
 	 */
 	void computeCoef(KNode *node);
 
 	/**
 	 * @brief Computes the repulsives forces that the node is subect to
 	 * @param n The node on which to compute the forces
+	 * @param kdTree The kd-tree used to approximate the forces
 	 */
 	void computeReplForces(const tlp::node &n, KNode *kdTree);
 

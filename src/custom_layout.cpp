@@ -97,7 +97,12 @@ bool CustomLayout::check(std::string &errorMessage) {
 }
 
 void CustomLayout::init() {
-	for (auto n : graph->nodes()) {
+	m_nodesCopy = graph->nodes();
+	
+	tlp::BoundingBox bb = tlp::computeBoundingBox(graph, result, m_size, m_rot);
+	m_temp = m_cstInitTemp ? m_initTemp : std::max(std::min(bb.width(), bb.height()) * m_initTempFactor, 2 * m_L);
+
+	for (auto n : m_nodesCopy) {
 		m_disp[n] = tlp::Coord(0, 0, 0);
 		m_dispPrev[n] = tlp::Coord(0, 0, 0);
 		m_pos[n] = result->getNodeValue(n);
@@ -107,28 +112,16 @@ void CustomLayout::init() {
 bool CustomLayout::run() {
 	init();
 
-	const std::vector<tlp::node> &nodes = graph->nodes();
-	m_nodesCopy = nodes;
 	KNode *kdTree = buildKdTree(false, nullptr);
-	// kdTree->print();
-	tlp::BoundingBox bb = tlp::computeBoundingBox(graph, result, m_size, m_rot);
-	tlp::node n;
-	tlp::node u;
-	tlp::node v;
-	tlp::edge e;
-	tlp::Coord dist;
-	float t = m_cstInitTemp ? m_initTemp : std::max(std::min(bb.width(), bb.height()) * m_initTempFactor, 2 * m_L);
-	float init_temp = t;
-	float disp_norm;
-	float force;
 	bool quit = false;
 	unsigned int i = 1;
 
-	std::cout << "Init temp: " << t << std::endl;
+	std::cout << "Initial temperature: " << m_temp << std::endl;
 	std::string message = "Initial temperature: ";
-	message += std::to_string(init_temp);
+	message += std::to_string(m_temp);
 	pluginProgress->setComment(message);
 	auto start = std::chrono::high_resolution_clock::now();
+
 	while (!quit) {
 		if (i <= 4 || i % 20 == 0) { 
 			buildKdTree(true, kdTree);
@@ -143,7 +136,7 @@ bool CustomLayout::run() {
 		for (auto e : graph->edges()) { 
 			const tlp::node &u = graph->source(e);
 			const tlp::node &v = graph->target(e);
-			tlp::Coord dist = result->getNodeValue(u) - result->getNodeValue(v);
+			tlp::Coord dist = m_pos[u] - m_pos[v];
 			dist *= computeAttrForce(dist);
 			if (!m_condition || m_canMove->getNodeValue(u)) {
 		 		m_disp[u] -= dist;
@@ -155,15 +148,15 @@ bool CustomLayout::run() {
 
 		// update nodes position
 		#pragma omp parallel for
-		for (unsigned int i = 0; i < graph->numberOfNodes(); i++) { // update positions
-			tlp::node n = nodes[i];
+		for (unsigned int i = 0; i < m_nodesCopy.size(); i++) { // update positions
+			const tlp::node &n = m_nodesCopy[i];
 			float disp_norm = m_disp[n].norm();
 			
 			if (disp_norm != 0) {  
 				if (m_adaptiveCooling) {
 					//m_disp[n] *= std::min(adaptative_cool(n), 200.0f) / disp_norm;
-				} else if (!m_adaptiveCooling && t < disp_norm) {
-					m_disp[n] *= t / disp_norm;
+				} else if (!m_adaptiveCooling && m_temp < disp_norm) {
+					m_disp[n] *= m_temp / disp_norm;
 				}				
 			}
 
@@ -172,14 +165,8 @@ bool CustomLayout::run() {
 			m_disp[n] = tlp::Coord(0);
 		}
 
-		// update result property
-		#pragma omp parallel for
-		for (unsigned int i = 0; i < graph->numberOfNodes(); i++) { 
-			result->setNodeValue(nodes[i], m_pos[nodes[i]]);
-		}
-
 		if (!m_adaptiveCooling && !m_cstTemp)
-			t *= m_coolingFactor;
+			m_temp *= m_coolingFactor;
 
 		quit = i >= m_iterations || quit;
 		++i;
@@ -191,6 +178,12 @@ bool CustomLayout::run() {
 	}
 
 	deleteTree(kdTree);
+
+	// update result property
+	#pragma omp parallel for
+	for (unsigned int i = 0; i < graph->numberOfNodes(); i++) { 
+		result->setNodeValue(m_nodesCopy[i], m_pos[m_nodesCopy[i]]);
+	}
 
 	if (!tlp::ConnectedTest::isConnected(graph)) { // pack connected components
 		std::string errorMessage;
@@ -213,17 +206,16 @@ bool CustomLayout::run() {
 tlp::Coord CustomLayout::computeCenter(unsigned int start, unsigned int end) {
 	tlp::Coord center(0);
 	for (unsigned int i = start; i < end; ++i) {
-		center += result->getNodeValue(m_nodesCopy[i]);
+		center += m_pos[m_nodesCopy[i]];
 	}
 	return center / float(end - start);
 }
 
-float CustomLayout::computeRadius(unsigned int start, unsigned int end, tlp::Coord center, const tlp::LayoutProperty *layout, const tlp::SizeProperty *size) {
-	tlp::Coord result;
+float CustomLayout::computeRadius(unsigned int start, unsigned int end, tlp::Coord center) {
 	double maxRad = 0;
 	for (unsigned int i = start; i < end; ++i) {
-		const tlp::Coord &curCoord = layout->getNodeValue(m_nodesCopy[i]);
-		tlp::Size curSize(size->getNodeValue(m_nodesCopy[i]) / 2.0f);
+		const tlp::Coord &curCoord = m_pos[m_nodesCopy[i]];
+		tlp::Size curSize(m_size->getNodeValue(m_nodesCopy[i]) / 2.0f);
 		double nodeRad = sqrt(curSize.getW() * curSize.getW() + curSize.getH() * curSize.getH());
 		tlp::Coord radDir(curCoord - center);
 		double curRad = nodeRad + radDir.norm();
@@ -233,12 +225,8 @@ float CustomLayout::computeRadius(unsigned int start, unsigned int end, tlp::Coo
 			radDir = tlp::Coord(1.0, 0.0, 0.0);
 		}
 
-		if (curRad > maxRad) {
+		if (curRad > maxRad)
 			maxRad = curRad;
-			radDir /= radDir.norm();
-			radDir *= curRad;
-			result = radDir + center;
-		}
 	}
 	return maxRad;
 }
@@ -250,25 +238,25 @@ void CustomLayout::buildKdTreeAux(KNode *node, unsigned int level, bool refresh)
 	auto endIt = m_nodesCopy.begin() + node->end;
 	if (level % 2 == 0) {
 		std::nth_element(startIt, medianIt, endIt, [this](tlp::node &a, tlp::node &b) { 
-			return result->getNodeValue(a).x() < result->getNodeValue(b).x();
+			return m_pos[a].x() < m_pos[b].x();
 		});
-		int medianX = result->getNodeValue(m_nodesCopy[medianIndex]).x();
+		int medianX = m_pos[m_nodesCopy[medianIndex]].x();
 		std::partition(startIt, endIt, [this, &medianX](tlp::node &a) { 
-			return result->getNodeValue(a).x() < medianX;
+			return m_pos[a].x() < medianX;
 		});
 	} else { 
 		std::nth_element(startIt, medianIt, endIt, [this](tlp::node a, tlp::node b) {
-			return result->getNodeValue(a).y() < result->getNodeValue(b).y();
+			return m_pos[a].y() < m_pos[b].y();
 		});
-		int medianY = result->getNodeValue(m_nodesCopy[medianIndex]).y();
+		int medianY = m_pos[m_nodesCopy[medianIndex]].y();
 		std::partition(startIt, endIt, [this, &medianY](tlp::node &a) { 
-			return result->getNodeValue(a).y() < medianY;
+			return m_pos[a].y() < medianY;
 		});
 	}
 	tlp::Coord leftCenter = computeCenter(node->start, medianIndex);
 	tlp::Coord rightCenter = computeCenter(medianIndex, node->end);
-	float leftRadius = computeRadius(node->start, medianIndex, leftCenter, result, m_size);
-	float rightRadius = computeRadius(medianIndex, node->end, rightCenter, result, m_size);
+	float leftRadius = computeRadius(node->start, medianIndex, leftCenter);
+	float rightRadius = computeRadius(medianIndex, node->end, rightCenter);
 	if (refresh) {
 		node->leftChild->radius = leftRadius;
 		node->leftChild->center = leftCenter;
@@ -309,7 +297,7 @@ KNode* CustomLayout::buildKdTree(bool refresh, KNode *root=nullptr) {
 	}
 	
 	tlp::Coord center = computeCenter(0, m_nodesCopy.size());
-	float radius = computeRadius(0, m_nodesCopy.size(), center, result, m_size);
+	float radius = computeRadius(0, m_nodesCopy.size(), center);
 	if (refresh) {
 		root->radius = radius;
 		root->center = center;
@@ -332,12 +320,12 @@ void CustomLayout::computeReplForces(const tlp::node &n, KNode *kdTree) {
 		return;
 	}
 
-	// leaf node: compute the exact repulsive forces between n and the vertices contained in the leaf node
+	// leaf node case -> compute the exact repulsive forces between n and the vertices contained in the leaf node
 	if (kdTree->leftChild == nullptr && kdTree->rightChild == nullptr) {
 		for (unsigned int i = kdTree->start; i < kdTree->end; ++i) {
 			const tlp::node &v = m_nodesCopy[i];
 			if (n != v) {
-				tlp::Coord dist = result->getNodeValue(n) - result->getNodeValue(v);
+				tlp::Coord dist = m_pos[n] - m_pos[v];
 				dist *= computeReplForce(dist);
 				m_disp[n] += dist;
 			}
@@ -345,11 +333,10 @@ void CustomLayout::computeReplForces(const tlp::node &n, KNode *kdTree) {
 		return;
 	}
 
-	tlp::Coord dist = result->getNodeValue(n) - kdTree->center;
+	tlp::Coord dist = m_pos[n] - kdTree->center;
 	float distNorm = dist.norm();
 	
-	// internal node: n is outside the partition represented by kdTree -> compute the approximate repulsive force 
-	// between n and the vertices contained by the kd-tree node 
+	// internal node case and n is outside the partition -> compute the approximate repulsive force between n and the vertices contained by the kd-tree node 
 	if (distNorm > kdTree->radius) {
 		if (!m_multipoleExpansion) {
 			dist *= (kdTree->end - kdTree->start) * computeReplForce(dist);
@@ -364,7 +351,7 @@ void CustomLayout::computeReplForces(const tlp::node &n, KNode *kdTree) {
 			m_disp[n] += tlp::Coord(potential.real(), -potential.imag())*100.0f;
 		}
 	}
-	// internal node: n is inside the partition represented by kdTree -> continue through the kd-tree 
+	// internal node case and n is inside the partition -> continue through the kd-tree 
 	else { 
 		computeReplForces(n, kdTree->leftChild);
 		computeReplForces(n, kdTree->rightChild);
@@ -384,7 +371,7 @@ void CustomLayout::computeCoef(KNode *node) {
 	
 	for (unsigned int i = node->start; i < node->end; ++i) {
 		tlp::node v = m_nodesCopy[i];
-		tlp::Coord dist = result->getNodeValue(v) - node->center;
+		tlp::Coord dist = m_pos[v] - node->center;
 		ziMinusz0Overk = std::complex<float>(dist.x(), dist.y()); 
 		for (unsigned int k = 1; k < nbCoefs+1; ++k) {
 			coefs[k-1] += -1.0f * ziMinusz0Overk / (float)k; // ak
@@ -393,230 +380,3 @@ void CustomLayout::computeCoef(KNode *node) {
 	}
 	node->coefs = coefs;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// float CustomLayout::adaptative_cool(const tlp::node &n) {
-// 	tlp::Vec3f a = m_disp->getNodeValue(n);
-// 	tlp::Vec3f b = m_dispPrev->getNodeValue(n);
-// 	float a_norm = a.norm();
-// 	float b_norm = b.norm();
-// 	float angle = std::atan2(a.x() * b.y() - a.y() * b.x(), a.x() * b.x() + a.y() * b.y()); // atan2f(det, dot)
-// 	float c;
-
-// 	if (-fPI_6 <= angle && angle <= fPI_6)
-// 		c = 2;
-// 	else if ((fPI_6 < angle && angle <= f2_PI_6) || (-f2_PI_6 <= angle && angle < -fPI_6))
-// 		c = 3.0f / 2;
-// 	else if ((f2_PI_6 < angle && angle <= f3_PI_6) || (-f3_PI_6 <= angle && angle < -f2_PI_6))
-// 		c = 1;
-// 	else if ((f3_PI_6 < angle && angle <= f4_PI_6) || (-f4_PI_6 <= angle && angle < -f3_PI_6))
-// 		c = 2.0f / 3;
-// 	else
-// 		c = 1.0f / 3; 
-
-// 	float res = c * b_norm;
-// 	if (a_norm > res && res > 0)
-// 		return res;
-// 	else 
-// 		return a_norm;
-// }
-
-// //===================================
-// tlp::Graph* inducedSubGraphCustom(std::vector<tlp::node>::iterator begin, std::vector<tlp::node>::iterator end, tlp::Graph *parent, const std::string &name) {
-// 	if (parent == nullptr) {
-// 		std::cerr << "parent graph must exist to create the induced subgraph" << std::endl;
-// 		return nullptr;
-// 	}
-	
-// 	tlp::Graph *result = parent->addSubGraph(name);
-	
-// 	for (auto it = begin; it != end; ++it) {
-// 		result->addNode(*it);
-// 	}
-
-// 	tlp::node n;
-// 	tlp::edge e;
-// 	forEach (n, result->getNodes()) {
-// 		forEach (e, parent->getOutEdges(n)) {
-// 			if (result->isElement(parent->target(e)))
-// 				result->addEdge(e);
-// 		}
-// 	}
-// 	return result;
-// }
-// //===================================
-
-// void CustomLayout::build_tree_aux(tlp::Graph *g, unsigned int level) {
-// 	std::vector<tlp::node> nodes = g->nodes(); // TODO: find a way to not copy the vector each time...
-	
-// 	int medianIndex = nodes.size() / 2;
-// 	auto medianIt = nodes.begin() + medianIndex;
-
-// 	if (level % 2 == 0) {
-// 		if (m_linearMedian) { // find the median in linear time then rearrange the nodes around it 
-// 			std::nth_element(nodes.begin(), medianIt, nodes.end(), [this](tlp::node &a, tlp::node &b) { 
-// 				return result->getNodeValue(a).x() < result->getNodeValue(b).x();
-// 			});
-// 			int medianX = result->getNodeValue(nodes[medianIndex]).x();
-// 			std::partition(nodes.begin(), nodes.end(), [this, &medianX](tlp::node &a) { 
-// 				return result->getNodeValue(a).x() < medianX;
-// 			});
-// 		} else { // sort the nodes in O(n*log(n)) to find the median
-// 			std::sort(nodes.begin(), nodes.end(), [this](tlp::node a, tlp::node b) {
-// 				return result->getNodeValue(a).x() < result->getNodeValue(b).x();
-// 			});
-// 		}
-// 	} else { // same on the y-axis
-// 		if (m_linearMedian) {
-// 			std::nth_element(nodes.begin(), nodes.begin() + medianIndex, nodes.end(), [this](tlp::node a, tlp::node b) {
-// 				return result->getNodeValue(a).y() < result->getNodeValue(b).y();
-// 			});
-// 			int medianY = result->getNodeValue(nodes[medianIndex]).y();
-// 			std::partition(nodes.begin(), nodes.end(), [this, &medianY](tlp::node &a) { 
-// 				return result->getNodeValue(a).y() < medianY;
-// 			});
-// 		} else {
-// 			std::sort(nodes.begin(), nodes.end(), [this](tlp::node a, tlp::node b) {
-// 				return result->getNodeValue(a).y() < result->getNodeValue(b).y();
-// 			});
-// 		}
-// 	}
-
-// 	tlp::Graph * leftSubgraph = inducedSubGraphCustom(nodes.begin(), nodes.begin() + medianIndex, g, "unnamed");
-// 	tlp::Graph * rightSubgraph = inducedSubGraphCustom(nodes.begin() + medianIndex, nodes.end(), g, "unnamed");
-// 	std::pair<tlp::Coord, tlp::Coord> boundingRadiusLeft = tlp::computeBoundingRadius(leftSubgraph, result, m_size, m_rot);
-// 	std::pair<tlp::Coord, tlp::Coord> boundingRadiusRight = tlp::computeBoundingRadius(rightSubgraph, result, m_size, m_rot);
-// 	leftSubgraph->setAttribute<tlp::Vec3f>("center", boundingRadiusLeft.first);
-// 	rightSubgraph->setAttribute<tlp::Vec3f>("center", boundingRadiusRight.first);
-// 	leftSubgraph->setAttribute<float>("radius", boundingRadiusLeft.first.dist(boundingRadiusLeft.second));
-// 	rightSubgraph->setAttribute<float>("radius", boundingRadiusRight.first.dist(boundingRadiusRight.second));
-
-// 	// // tlp::ColorProperty *leftColor = leftSubgraph->getProperty<tlp::ColorProperty>("viewColor");
-// 	// // tlp::ColorProperty *rightColor = leftSubgraph->getProperty<tlp::ColorProperty>("viewColor");
-// 	// // tlp::node n;
-// 	// // tlp::Color color(std::rand() % 255, std::rand() % 255, std::rand() % 255);
-// 	// // forEach (n, leftSubgraph->getNodes()) {
-// 	// // 	leftColor->setNodeValue(n, color);
-// 	// // }
-// 	// // color = tlp::Color(std::rand() % 255, std::rand() % 255, std::rand() % 255);
-// 	// // forEach (n, rightSubgraph->getNodes()) {
-// 	// // 	rightColor->setNodeValue(n, color);		
-// 	// // }
-
-// 	if (m_multipoleExpansion) {
-// 		compute_coef(leftSubgraph);
-// 		compute_coef(rightSubgraph);
-// 	}
-
-// 	if (std::min(leftSubgraph->numberOfNodes(), rightSubgraph->numberOfNodes()) <= m_maxPartitionSize)
-// 		return;
-
-// 	build_tree_aux(leftSubgraph, level + 1);
-// 	build_tree_aux(rightSubgraph, level + 1);
-// }
-
-
-// void CustomLayout::build_kd_tree() {
-// 	if (graph->numberOfNodes() <= m_maxPartitionSize) return;
-// 	std::pair<tlp::Coord, tlp::Coord> boundingRadius = tlp::computeBoundingRadius(graph, result, m_size, m_rot);
-// 	graph->setAttribute<tlp::Vec3f>("center", boundingRadius.first);
-// 	graph->setAttribute<float>("radius", boundingRadius.first.dist(boundingRadius.second));
-
-// 	tlp::Graph *subgraph;
-// 	stableForEach (subgraph, graph->getSubGraphs()) { // TODO: check if the stableForEach is necessary
-// 		graph->delAllSubGraphs(subgraph);
-// 	}
-
-// 	if (m_multipoleExpansion)
-// 		compute_coef(graph);
-	
-// 	build_tree_aux(graph,  0);
-// }
-
-// void CustomLayout::compute_coef(tlp::Graph *g) {
-// 	tlp::Vec3f *center = static_cast<tlp::Vec3f*>(g->getAttribute("center")->value);	
-// 	std::complex<float> z0(center->x(), center->y());
-// 	std::complex<float> zi;
-// 	std::complex<float> ziMinusz0Overk;
-// 	std::vector<std::complex<float>> coefs;
-// 	tlp::node v;
-// 	tlp::Vec3f pos;
-// 	unsigned int nbCoefs = m_pTerm + 1;
-
-// 	coefs.reserve(5);
-// 	for (unsigned int i = 0; i < nbCoefs; ++i)
-// 		coefs.push_back(std::complex<float>(0, 0));
-
-// 	coefs[0] += g->numberOfNodes(); // a0
-	
-// 	forEach(v, g->getNodes()) {
-// 		pos = result->getNodeValue(v);
-// 		zi = std::complex<float>(pos.x(), pos.y());
-// 		ziMinusz0Overk = zi - z0; 
-// 		for (unsigned int k = 1; k < nbCoefs; ++k) {
-// 			coefs[k] = -1.0f * ziMinusz0Overk / (float)k; // ak
-// 			ziMinusz0Overk *= ziMinusz0Overk; // next power
-// 		}
-// 	}
-// 	g->setAttribute("coefs", coefs);
-// }
-
-
-// void CustomLayout::compute_repl_forces(const tlp::node &n, tlp::Graph *g) {
-// 	tlp::Vec3f dist;
-// 	if (g->numberOfNodes() <= m_maxPartitionSize || g->numberOfSubGraphs() == 0) { // leaf node
-// 		tlp::node v;
-// 		forEach (v, g->getNodes()) {
-// 			if (v != n) {
-// 				dist = result->getNodeValue(n) - result->getNodeValue(v);
-// 				m_disp->setNodeValue(n, m_disp->getNodeValue(n) + dist * compute_repl_force(dist));
-// 			}
-// 		}
-// 		return;
-// 	}
-
-// 	tlp::Vec3f *center = static_cast<tlp::Vec3f*>(g->getAttribute("center")->value);
-// 	float *radius = static_cast<float*>(g->getAttribute("radius")->value);
-	
-// 	if (center == nullptr || radius == nullptr) {
-// 		std::cerr << "center or radius attributes does not exist" << std::endl;
-// 		return;
-// 	}
-
-// 	dist = result->getNodeValue(n) - *center;
-// 	float dist_norm = dist.norm();
-// 	if (dist_norm > *radius) { // internal node, approximation
-// 		if (!m_multipoleExpansion) {
-// 			m_disp->setNodeValue(n, m_disp->getNodeValue(n) + dist * compute_repl_force(dist) * (float)g->numberOfNodes());
-// 		} else {
-// 			std::vector<std::complex<float>> *coefs = reinterpret_cast<std::vector<std::complex<float>> *>(g->getAttribute("coefs")->value);
-// 			std::complex<float> zMinusz0 = std::complex<float>(result->getNodeValue(n).x(), result->getNodeValue(n).y()) - std::complex<float>(center->x(), center->y());
-// 			std::complex<float> potential = (*coefs)[0] / zMinusz0; 
-// 			for (unsigned int k = 1; k < m_pTerm + 1; ++k) {
-// 				zMinusz0 *= zMinusz0; // next power
-// 				potential += (float)k * (*coefs)[k] / zMinusz0;
-// 			}
-// 			m_disp->setNodeValue(n, m_disp->getNodeValue(n) + (dist / dist_norm) * tlp::Vec3f(potential.real(), -potential.imag()));
-// 		}
-// 	} else { // internal node, continue
-// 		tlp::Graph *sg;
-// 		forEach (sg, g->getSubGraphs()) {
-// 			compute_repl_forces(n, sg);
-// 		}
-// 	}
-// }
