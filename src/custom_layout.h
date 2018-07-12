@@ -1,6 +1,8 @@
 #pragma once
 
 #include <string>
+#include <complex>
+
 #include <tulip/Graph.h>
 #include <tulip/TulipPluginHeaders.h>
 #include <tulip/BooleanProperty.h>
@@ -12,6 +14,8 @@ struct KNode {
 	tlp::Coord center;
 	KNode *leftChild;
 	KNode *rightChild;
+	float a0;
+	std::vector<std::complex<float>> coefs;
 
 	KNode(unsigned int _start=0, unsigned int _end=0, float _radius=0, tlp::Coord _center=tlp::Coord(0)) 
 		: start(_start), end(_end), radius(_radius), center(_center) {
@@ -37,6 +41,9 @@ struct KNode {
 		std::cout << "start: " << start << " | end: " << end << " | span: " << end - start << std::endl;
 		std::cout << "center: " << center << " | radius: " << radius << " | depth: " << depth() << std::endl;
 		std::cout << "leftChild: " << leftChild << " | rightChild: " << rightChild << std::endl;
+		for (unsigned int i = 0; i < 4; ++i) {
+			std::cout << "coef" << i << " = " << coefs[i] << std::endl;
+		}
 		std::cout << "----------------" << std::endl;
 		if (leftChild != nullptr)
 			leftChild->print();
@@ -136,7 +143,7 @@ private:
 	 * a graph attribute called "coefs" (std::vector<std::complex<float>>)
 	 * @param g The graph from which to compute the coefficients
 	 */
-	void computeCoef(tlp::Graph *g);
+	void computeCoef(KNode *node);
 
 	/**
 	 * @brief Computes the repulsives forces that the node is subect to

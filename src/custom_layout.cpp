@@ -16,7 +16,6 @@
 #include <cmath>
 #include <algorithm>
 #include <chrono>
-#include <complex>
 
 const bool DEFAUT_CST_TEMP = false;
 const bool DEFAUT_CST_INIT_TEMP = false;
@@ -34,9 +33,6 @@ const float fPI_6 = M_PI / 6.0f;
 const float f2_PI_6 = 2.0f * fPI_6;
 const float f3_PI_6 = 3.0f * fPI_6;
 const float f4_PI_6 = 4.0f * fPI_6;
-
-unsigned int approxCount = 0;
-unsigned int exactCount = 0;
 
 PLUGIN(CustomLayout)
 
@@ -114,6 +110,7 @@ bool CustomLayout::run() {
 	const std::vector<tlp::node> &nodes = graph->nodes();
 	m_nodesCopy = nodes;
 	KNode *kdTree = buildKdTree(false, nullptr);
+	// kdTree->print();
 	tlp::BoundingBox bb = tlp::computeBoundingBox(graph, result, m_size, m_rot);
 	tlp::node n;
 	tlp::node u;
@@ -140,52 +137,49 @@ bool CustomLayout::run() {
 		for (auto n : m_nodesCopy) {
 			if (!m_condition || m_canMove->getNodeValue(n))
 				computeReplForces(n, kdTree);
-			std::cout << "aprox: " << approxCount << " | exact: " << exactCount << std::endl;
-			approxCount = 0;
-			exactCount = 0;
 		}
 
-		// //compute attractive forces TODO: find a way to parallelize
-		// for (auto e : graph->edges()) { 
-		// 	const tlp::node &u = graph->source(e);
-		// 	const tlp::node &v = graph->target(e);
-		// 	tlp::Coord dist = result->getNodeValue(u) - result->getNodeValue(v);
-		// 	dist *= computeAttrForce(dist);
-		// 	if (!m_condition || m_canMove->getNodeValue(u)) {
-		//  		m_disp[u] -= dist;
-		// 	}
-		// 	if (!m_condition || m_canMove->getNodeValue(v)) {
-		// 		m_disp[v] += dist;
-		// 	}
-		// }
+		//compute attractive forces TODO: find a way to parallelize
+		for (auto e : graph->edges()) { 
+			const tlp::node &u = graph->source(e);
+			const tlp::node &v = graph->target(e);
+			tlp::Coord dist = result->getNodeValue(u) - result->getNodeValue(v);
+			dist *= computeAttrForce(dist);
+			if (!m_condition || m_canMove->getNodeValue(u)) {
+		 		m_disp[u] -= dist;
+			}
+			if (!m_condition || m_canMove->getNodeValue(v)) {
+				m_disp[v] += dist;
+			}
+		}
 
-		// // update nodes position
-		// #pragma omp parallel for
-		// for (unsigned int i = 0; i < graph->numberOfNodes(); i++) { // update positions
-		// 	tlp::node n = nodes[i];
-		// 	float disp_norm = m_disp[n].norm();
+		// update nodes position
+		#pragma omp parallel for
+		for (unsigned int i = 0; i < graph->numberOfNodes(); i++) { // update positions
+			tlp::node n = nodes[i];
+			float disp_norm = m_disp[n].norm();
 			
-		// 	if (disp_norm != 0) {  
-		// 		if (m_adaptiveCooling) {
-		// 			//m_disp[n] *= std::min(adaptative_cool(n), 200.0f) / disp_norm;
-		// 		} else if (!m_adaptiveCooling && t < disp_norm) {
-		// 			m_disp[n] *= t / disp_norm;
-		// 		}				
-		// 	}
+			if (disp_norm != 0) {  
+				if (m_adaptiveCooling) {
+					//m_disp[n] *= std::min(adaptative_cool(n), 200.0f) / disp_norm;
+				} else if (!m_adaptiveCooling && t < disp_norm) {
+					m_disp[n] *= t / disp_norm;
+				}				
+			}
 
-		// 	m_pos[n] += m_disp[n];
-		// 	m_dispPrev[n] = m_disp[n];
-		// 	m_disp[n] = tlp::Coord(0);
-		// }
+			m_pos[n] += m_disp[n];
+			m_dispPrev[n] = m_disp[n];
+			m_disp[n] = tlp::Coord(0);
+		}
 
-		// // update result property
-		// #pragma omp parallel for
-		// for (unsigned int i = 0; i < graph->numberOfNodes(); i++) { 
-		// 	result->setNodeValue(nodes[i], m_pos[nodes[i]]);
-		// }
+		// update result property
+		#pragma omp parallel for
+		for (unsigned int i = 0; i < graph->numberOfNodes(); i++) { 
+			result->setNodeValue(nodes[i], m_pos[nodes[i]]);
+		}
 
-		// if (!m_adaptiveCooling && !m_cstTemp)
-		// 	t *= m_coolingFactor;
+		if (!m_adaptiveCooling && !m_cstTemp)
+			t *= m_coolingFactor;
 
 		quit = i >= m_iterations || quit;
 		++i;
@@ -294,7 +288,12 @@ void CustomLayout::buildKdTreeAux(KNode *node, unsigned int level, bool refresh)
 	// c = tlp::Color(std::rand() % 255, std::rand() % 255, std::rand() % 255);
 	// for (unsigned int i = node->rightChild->start; i < node->rightChild->end; ++i) {
 	// 	color->setNodeValue(m_nodesCopy[i], c);
-	// }	
+	// }
+
+	if (m_multipoleExpansion) {
+		computeCoef(node->leftChild);
+		computeCoef(node->rightChild);
+	}
 
 	if (std::min(medianIndex - node->start, node->end - medianIndex) <= m_maxPartitionSize) return;
 	#pragma omp task
@@ -317,6 +316,9 @@ KNode* CustomLayout::buildKdTree(bool refresh, KNode *root=nullptr) {
 	} else {
 		root = new KNode(0, m_nodesCopy.size(), radius, center);
 	}
+
+	if (m_multipoleExpansion)
+		computeCoef(root);
 	
 	#pragma omp parallel
 	#pragma omp single
@@ -340,7 +342,6 @@ void CustomLayout::computeReplForces(const tlp::node &n, KNode *kdTree) {
 				m_disp[n] += dist;
 			}
 		}
-		++exactCount;
 		return;
 	}
 
@@ -350,9 +351,18 @@ void CustomLayout::computeReplForces(const tlp::node &n, KNode *kdTree) {
 	// internal node: n is outside the partition represented by kdTree -> compute the approximate repulsive force 
 	// between n and the vertices contained by the kd-tree node 
 	if (distNorm > kdTree->radius) {
-		dist *= (kdTree->end - kdTree->start) * computeReplForce(dist);
-		m_disp[n] += dist;
-		++approxCount;		
+		if (!m_multipoleExpansion) {
+			dist *= (kdTree->end - kdTree->start) * computeReplForce(dist);
+			m_disp[n] += dist;
+		} else {
+			std::complex<float> zMinusz0 = std::complex<float>(dist.x(), dist.y());
+			std::complex<float> potential = kdTree->a0 / zMinusz0; 
+			for (unsigned int k = 1; k < m_pTerm+1; ++k) {
+				zMinusz0 *= zMinusz0; // next power
+				potential += (float)k * kdTree->coefs[k-1] / zMinusz0;
+			}
+			m_disp[n] += tlp::Coord(potential.real(), -potential.imag())*100.0f;
+		}
 	}
 	// internal node: n is inside the partition represented by kdTree -> continue through the kd-tree 
 	else { 
@@ -361,6 +371,28 @@ void CustomLayout::computeReplForces(const tlp::node &n, KNode *kdTree) {
 	}
 }
 
+void CustomLayout::computeCoef(KNode *node) {
+	std::complex<float> ziMinusz0Overk;
+	std::vector<std::complex<float>> coefs;
+	unsigned int nbCoefs = m_pTerm;
+
+	coefs.reserve(nbCoefs);
+	for (unsigned int i = 0; i < nbCoefs; ++i)
+		coefs.push_back(std::complex<float>(0, 0));
+
+	node->a0 = node->end - node->start;
+	
+	for (unsigned int i = node->start; i < node->end; ++i) {
+		tlp::node v = m_nodesCopy[i];
+		tlp::Coord dist = result->getNodeValue(v) - node->center;
+		ziMinusz0Overk = std::complex<float>(dist.x(), dist.y()); 
+		for (unsigned int k = 1; k < nbCoefs+1; ++k) {
+			coefs[k-1] += -1.0f * ziMinusz0Overk / (float)k; // ak
+			ziMinusz0Overk *= ziMinusz0Overk; // next power
+		}
+	}
+	node->coefs = coefs;
+}
 
 
 
