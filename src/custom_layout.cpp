@@ -154,7 +154,7 @@ bool CustomLayout::run() {
 			
 			if (disp_norm != 0) {  
 				if (m_adaptiveCooling) {
-					//m_disp[n] *= std::min(adaptative_cool(n), 200.0f) / disp_norm;
+					m_disp[n] *= std::min(adaptativeCool(n), 200.0f) / disp_norm;
 				} else if (!m_adaptiveCooling && m_temp < disp_norm) {
 					m_disp[n] *= m_temp / disp_norm;
 				}				
