@@ -203,6 +203,32 @@ bool CustomLayout::run() {
 	return true;
 }
 
+float CustomLayout::adaptativeCool(const tlp::node &n) {
+	tlp::Vec3f a = m_disp[n];
+	tlp::Vec3f b = m_dispPrev[n];
+	float a_norm = a.norm();
+	float b_norm = b.norm();
+	float angle = std::atan2(a.x() * b.y() - a.y() * b.x(), a.x() * b.x() + a.y() * b.y()); // atan2(det, dot)
+	float c;
+
+	if (-fPI_6 <= angle && angle <= fPI_6)
+		c = 2;
+	else if ((fPI_6 < angle && angle <= f2_PI_6) || (-f2_PI_6 <= angle && angle < -fPI_6))
+		c = 3.0f / 2;
+	else if ((f2_PI_6 < angle && angle <= f3_PI_6) || (-f3_PI_6 <= angle && angle < -f2_PI_6))
+		c = 1;
+	else if ((f3_PI_6 < angle && angle <= f4_PI_6) || (-f4_PI_6 <= angle && angle < -f3_PI_6))
+		c = 2.0f / 3;
+	else
+		c = 1.0f / 3; 
+
+	float res = c * b_norm;
+	if (a_norm > res && res > 0)
+		return res;
+	else 
+		return a_norm;
+}
+
 tlp::Coord CustomLayout::computeCenter(unsigned int start, unsigned int end) {
 	tlp::Coord center(0);
 	for (unsigned int i = start; i < end; ++i) {
