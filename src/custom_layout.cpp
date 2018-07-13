@@ -77,10 +77,6 @@ bool CustomLayout::check(std::string &errorMessage) {
 			pluginProgress->setError("\"block nodes\" parameter is true but no BooleanProperty was given. Check parameter \"movable nodes\"");
 			return false;
 		}
-
-		dataSet->get("multipole expansion", m_multipoleExpansion); 		
-		dataSet->get("block nodes", m_condition); 		
-		dataSet->get("movable nodes", m_canMove);
 	}
 	
 	result->copy(graph->getProperty<tlp::LayoutProperty>("viewLayout"));

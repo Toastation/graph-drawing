@@ -45,14 +45,14 @@ class MergerFMMM:
             max_positioned_neighbors = -1
             max_positioned_neighbors_node = cc[0]
             for n in cc:
-                positioned_neighbors = [neighbor for neighbor in ccSg.getInOutNodes(n) if positioned[neighbor]]
+                positioned_neighbors = [neighbor for neighbor in cc_sg.getInOutNodes(n) if positioned[neighbor]]
                 if len(positioned_neighbors) > max_positioned_neighbors:
                     max_positioned_neighbors_node = n
                     max_positioned_neighbors = len(positioned_neighbors)
 
             for n in cc_sg.bfs(max_positioned_neighbors_node):
                 can_move[n] = True
-                positioned_neighbors = [neighbor for neighbor in graph.getInOutNodes(n) if positioned[neighbor]]
+                positioned_neighbors = [neighbor for neighbor in cc_sg.getInOutNodes(n) if positioned[neighbor]]
                 nb_positioned_neighbors = len(positioned_neighbors)
                 if nb_positioned_neighbors ==  0:
                     pos[n] = tlp.Vec3f(bounding_box[0].x() + random.random() * bounding_box.width(), bounding_box[0].y() + random.random() * bounding_box.height())
