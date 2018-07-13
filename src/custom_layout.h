@@ -89,7 +89,6 @@ private:
 	bool m_cstInitTemp; // Whether or not the initial annealing temperature is predefined. If false, it is the the initial temperature is sqrt(|V|) 
 	bool m_condition; // Whether or not to block certain nodes.
 	bool m_multipoleExpansion; // Whether or not to use the multipole extension formula
-	bool m_linearMedian; // If true, finds the median in linear time with introselect. If false, uses quicksort to find the median.
 	bool m_adaptiveCooling; //
 	float m_L; // Ideal edge length
 	float m_Kr; // Repulsive force constant
@@ -97,7 +96,7 @@ private:
 	float m_initTemp; // Initial annealing temperature (if m_cstInitTemp is true)
 	float m_initTempFactor; // Factor to apply on the initial annealing temperature (if m_cstInitTemp is false)
 	float m_coolingFactor; // Cooling rate of the annealing temperature
-	float m_temp;
+	float m_temp; // Global temperature of the graph
 	unsigned int m_iterations; // Number of iterations
 	unsigned int m_maxPartitionSize; // Maximum number of nodes of the smallest partition of the graph (via KD-tree)
 	unsigned int m_pTerm; // Number of term to compute in the p-term multipole expansion

@@ -13,13 +13,12 @@ int main() {
     // std::ofstream out("out.txt");
     // std::cout.rdbuf(out.rdbuf());
 
-    tlp::Graph *graph = tlp::loadGraph("C:/Users/Melvin.Melvin-PC/Desktop/work/graph-drawing/graphs/other/n1000.json");
+    tlp::Graph *graph = tlp::loadGraph("C:/Users/Melvin.Melvin-PC/Desktop/work/graph-drawing/graphs/other/incremental.json");
 
     std::string errorMessage;
     tlp::LayoutProperty *layout = graph->getLocalProperty<tlp::LayoutProperty>("viewLayout");
     tlp::DataSet ds;
-    ds.set("linear median", true);
-    graph->applyPropertyAlgorithm("Custom Layout", layout, errorMessage, nullptr, &ds);
+    graph->applyAlgorithm("Incremental", errorMessage);
 
     if (!errorMessage.empty()) {
         std::cout << errorMessage << std::endl;

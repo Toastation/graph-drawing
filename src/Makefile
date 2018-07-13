@@ -9,8 +9,11 @@ dll_build_dir="C:/Program Files/Tulip-5.1.0/lib/tulip/"
 
 all: main
 
-main: main.cpp custom_layout.cpp 
+main: main.cpp custom_layout.cpp incremental.cpp
 		$(CC) $(CFLAGS) $^ $(lib_dir)libtulip-core-5.1.dll $(lib_dir)libtulip-ogl-5.1.dll $(lib_dir)libftgl-tulip-5.1.dll $(lib_dir)libtulip-ogdf-5.1.dll $(lib_dir)libOGDF-tulip-5.1.dll -I$(include_dir) -I$(include_dir_tulip) -I$(include_dir_ogdf) -o $(build_dir)$@
 
 CustomLayout: custom_layout.cpp
+		$(CC) $(CFLAGS) -DBUILD_LIB -shared $^ $(lib_dir)libtulip-core-5.1.dll $(lib_dir)libtulip-ogl-5.1.dll $(lib_dir)libftgl-tulip-5.1.dll $(lib_dir)libtulip-ogdf-5.1.dll $(lib_dir)libOGDF-tulip-5.1.dll -I$(include_dir) -I$(include_dir_tulip) -I$(include_dir_ogdf) -o $(dll_build_dir)lib$@-5.1.0.dll
+
+Incremental: incremental.cpp
 		$(CC) $(CFLAGS) -DBUILD_LIB -shared $^ $(lib_dir)libtulip-core-5.1.dll $(lib_dir)libtulip-ogl-5.1.dll $(lib_dir)libftgl-tulip-5.1.dll $(lib_dir)libtulip-ogdf-5.1.dll $(lib_dir)libOGDF-tulip-5.1.dll -I$(include_dir) -I$(include_dir_tulip) -I$(include_dir_ogdf) -o $(dll_build_dir)lib$@-5.1.0.dll

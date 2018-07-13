@@ -45,13 +45,11 @@ class MergerFMMM:
             max_positioned_neighbors = -1
             max_positioned_neighbors_node = cc[0]
             for n in cc:
-                positioned_neighbors = [neighbor for neighbor in graph.getInOutNodes(n) if positioned[neighbor]]
+                positioned_neighbors = [neighbor for neighbor in ccSg.getInOutNodes(n) if positioned[neighbor]]
                 if len(positioned_neighbors) > max_positioned_neighbors:
                     max_positioned_neighbors_node = n
                     max_positioned_neighbors = len(positioned_neighbors)
 
-            print("max nb positioned neigh {} {}".format(max_positioned_neighbors_node, max_positioned_neighbors))
-            
             for n in cc_sg.bfs(max_positioned_neighbors_node):
                 can_move[n] = True
                 positioned_neighbors = [neighbor for neighbor in graph.getInOutNodes(n) if positioned[neighbor]]

@@ -56,7 +56,6 @@ CustomLayout::~CustomLayout() {
 bool CustomLayout::check(std::string &errorMessage) {
 	m_condition = false;
 	m_multipoleExpansion = false;
-	m_linearMedian = false;
 	m_adaptiveCooling = false;
 
 	bool btemp = false;
@@ -68,8 +67,6 @@ bool CustomLayout::check(std::string &errorMessage) {
 			m_iterations = itemp;
 		if (dataSet->get("adaptive cooling", btemp))
 			m_adaptiveCooling = btemp;
-		if (dataSet->get("linear median", btemp))
-			m_linearMedian = btemp;
 		if (dataSet->get("multipole expansion", btemp))
 			m_multipoleExpansion = btemp;
 		if (dataSet->get("block nodes", btemp))
@@ -81,7 +78,6 @@ bool CustomLayout::check(std::string &errorMessage) {
 			return false;
 		}
 
-		dataSet->get("linear median", m_linearMedian); 		
 		dataSet->get("multipole expansion", m_multipoleExpansion); 		
 		dataSet->get("block nodes", m_condition); 		
 		dataSet->get("movable nodes", m_canMove);
@@ -94,19 +90,6 @@ bool CustomLayout::check(std::string &errorMessage) {
 	result->setAllEdgeValue(std::vector<tlp::Vec3f>(0));
 
 	return true;
-}
-
-void CustomLayout::init() {
-	m_nodesCopy = graph->nodes();
-	
-	tlp::BoundingBox bb = tlp::computeBoundingBox(graph, result, m_size, m_rot);
-	m_temp = m_cstInitTemp ? m_initTemp : std::max(std::min(bb.width(), bb.height()) * m_initTempFactor, 2 * m_L);
-
-	for (auto n : m_nodesCopy) {
-		m_disp[n] = tlp::Coord(0, 0, 0);
-		m_dispPrev[n] = tlp::Coord(0, 0, 0);
-		m_pos[n] = result->getNodeValue(n);
-	}
 }
 
 bool CustomLayout::run() {
@@ -201,6 +184,19 @@ bool CustomLayout::run() {
 	std::cout << "Iterations done: " << i  << std::endl;
 
 	return true;
+}
+
+void CustomLayout::init() {
+	m_nodesCopy = graph->nodes();
+	
+	tlp::BoundingBox bb = tlp::computeBoundingBox(graph, result, m_size, m_rot);
+	m_temp = m_cstInitTemp ? m_initTemp : std::max(std::min(bb.width(), bb.height()) * m_initTempFactor, 2 * m_L);
+
+	for (auto n : m_nodesCopy) {
+		m_disp[n] = tlp::Coord(0, 0, 0);
+		m_dispPrev[n] = tlp::Coord(0, 0, 0);
+		m_pos[n] = result->getNodeValue(n);
+	}
 }
 
 float CustomLayout::adaptativeCool(const tlp::node &n) {
