@@ -40,13 +40,15 @@ CustomLayout::CustomLayout(const tlp::PluginContext *context)
 	: LayoutAlgorithm(context), m_cstTemp(DEFAUT_CST_TEMP), m_cstInitTemp(DEFAUT_CST_INIT_TEMP), m_L(DEFAULT_L), m_Kr(DEFAULT_KR), m_Ks(DEFAULT_KS),
 	  m_initTemp(DEFAULT_INIT_TEMP), m_initTempFactor(DEFAULT_INIT_TEMP_FACTOR), m_coolingFactor(DEFAULT_COOLING_FACTOR), m_iterations(DEFAUT_ITERATIONS), 
 	  m_maxPartitionSize(DEFAULT_MAX_PARTITION_SIZE), m_pTerm(DEFAULT_PTERM) {
-	addInParameter<unsigned int>("iterations", "", "300", false);
-	addInParameter<unsigned int>("max disp", "", "200", false);
-	addInParameter<float>("ideal edge length", "", "10", false);
-	addInParameter<float>("threshold", "", "0.1", false);
-	addInParameter<bool>("adaptive cooling", "", "", false);
-	addInParameter<bool>("stopping criterion", "", "", false);
-	addInParameter<bool>("multipole expansion", "", "", false);
+	addInParameter<unsigned int>("max iterations", "The maximum number of iterations of the algorithm.", "300", false);
+	addInParameter<unsigned int>("max displacement", "The maximum length a node can move. Very high values or very low values may result in chaotic behavior.", "200", false);
+	addInParameter<float>("ideal edge length", "The ideal edge length.", "10", false);
+	addInParameter<float>("spring force strength", "Factor of the spring force", "1", false);
+	addInParameter<float>("repulsive force strength", "Factor of the repulsive force", "100", false);
+	addInParameter<float>("convergence threshold", "If the average node energy is lower than this threshold, the graph is considered to have converged and the algorithm stops. Only taken into consideration if \"stopping criterion\" is true", "0.1", false);
+	addInParameter<bool>("adaptive cooling", "If true, the algo uses a local cooling function based on the angle between each node's movement. Else it uses a global linear cooling function.", "", false);
+	addInParameter<bool>("stopping criterion", "If true, stops the algo before the maximum number of iterations if the graph has converged. See \"convergence threshold\"", "", false);
+	addInParameter<bool>("multipole expansion", "If true, apply a 4-term multipole expansion for more accurate layout. May affect performances.", "", false);
 	addInParameter<bool>("block nodes", "If true, only nodes in the set \"movable nodes\" will move.", "", false);
 	addInParameter<tlp::BooleanProperty>("movable nodes", "Set of nodes allowed to move. Only taken into account if \"blocked nodes\" is true", "", false);
 	addDependency("Connected Component Packing", "1.0");
@@ -67,13 +69,17 @@ bool CustomLayout::check(std::string &errorMessage) {
 	tlp::BooleanProperty *temp;
 
 	if (dataSet != nullptr) {
-		if (dataSet->get("iterations", itemp))
+		if (dataSet->get("max iterations", itemp))
 			m_iterations = itemp;
-		if (dataSet->get("max disp", itemp))
+		if (dataSet->get("max displacement", itemp))
 			m_maxDisp = itemp;
 		if (dataSet->get("ideal edge length", ftemp))
 			m_L = ftemp;
-		if (dataSet->get("threshold", ftemp))
+		if (dataSet->get("spring force strength", ftemp))
+			m_Ks = ftemp;
+		if (dataSet->get("repulsive force strength", ftemp))
+			m_Kr = ftemp;
+		if (dataSet->get("convergence threshold", ftemp))
 			m_threshold = ftemp;
 		if (dataSet->get("adaptive cooling", btemp))
 			m_adaptiveCooling = btemp;
@@ -105,8 +111,9 @@ bool CustomLayout::run() {
 
 	KNode *kdTree = buildKdTree(false, nullptr);
 	bool quit = false;
-	unsigned int i = 1;
+	unsigned int it = 1;
 	float averageDisp = 0;
+	float init_temp = m_temp;
 	
 	std::cout << "Initial temperature: " << m_temp << std::endl;
 	std::string message = "Initial temperature: ";
@@ -115,7 +122,7 @@ bool CustomLayout::run() {
 	auto start = std::chrono::high_resolution_clock::now();
 
 	while (!quit) {
-		if (i <= 4 || i % 20 == 0) { 
+		if (it <= 4 || it % 20 == 0) { 
 			buildKdTree(true, kdTree);
 		}
 
@@ -158,8 +165,9 @@ bool CustomLayout::run() {
 			m_disp[n] = tlp::Coord(0);
 		}
 
-		// averageDisp /= m_nodesCopy.size();
-		// averageDisp = 0;
+		averageDisp /= m_nodesCopy.size();
+		std::cout << it << " | " << averageDisp << std::endl;
+		averageDisp = 0;
 
 		if (m_stoppingCriterion && m_temp <= m_threshold)
 			quit = true;
@@ -167,8 +175,8 @@ bool CustomLayout::run() {
 		if (!m_adaptiveCooling && !m_cstTemp)
 			m_temp *= m_coolingFactor;
 
-		quit = i >= m_iterations || quit;
-		++i;
+		quit = it >= m_iterations || quit;
+		++it;
 
 		// pluginProgress->progress(i, m_iterations+2);
 		// if (pluginProgress->state() != tlp::TLP_CONTINUE) {
@@ -197,7 +205,7 @@ bool CustomLayout::run() {
 	auto end = std::chrono::high_resolution_clock::now();
 	std::chrono::duration<double> elapsed = end - start;
 	std::cout << "elapsed: " << elapsed.count() << std::endl;
-	std::cout << "Iterations done: " << i  << std::endl;
+	std::cout << "Iterations done: " << it  << std::endl;
 
 	return true;
 }

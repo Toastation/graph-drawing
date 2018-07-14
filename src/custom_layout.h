@@ -176,11 +176,11 @@ private:
 	 * @return float The magnitude of the force
 	 */
 	float computeReplForce(const tlp::Vec3f &dist) {
-		float dist_norm = dist.norm();
-		if (dist_norm == 0) // push the nodes apart slightly 
+		float distNorm = dist.norm();
+		if (distNorm == 0) // push the nodes apart slightly 
 			return ((float) std::rand()) / (float) RAND_MAX;;
 		// return m_Kr / (dist_norm * dist_norm * dist_norm);
-		return m_Kr / (dist_norm * dist_norm);
+		return m_Kr / (distNorm * distNorm);
 	}
 
 	/**
@@ -189,10 +189,19 @@ private:
 	 * @return float The magnitude of the force
 	 */
 	float computeAttrForce(const tlp::Vec3f &dist) {
-		float dist_norm = dist.norm();
-		if (dist_norm == 0) // push the nodes apart slightly 
+		float distNorm = dist.norm();
+		if (distNorm == 0) // push the nodes apart slightly 
 			return ((float) std::rand()) / (float) RAND_MAX;;
 		// return m_Ks * (dist_norm - m_L) / dist_norm;
-		return m_Ks * dist_norm * std::log(dist_norm / m_L);
+		return m_Ks * distNorm * std::log(distNorm / m_L);
+	}
+
+	float computeReplForceIntgr(const tlp::Vec3f &dist) {
+		return -m_Kr / dist.norm();
+	}
+
+	float computeAttrForceIntgr(const tlp::Vec3f &dist) {
+		float distNorm = dist.norm();
+		return (m_Ks / 9.0f) * (distNorm * distNorm * distNorm * (std::log(distNorm / m_L) - 1) + (m_L * m_L * m_L));
 	}
 };
