@@ -41,8 +41,11 @@ CustomLayout::CustomLayout(const tlp::PluginContext *context)
 	  m_initTemp(DEFAULT_INIT_TEMP), m_initTempFactor(DEFAULT_INIT_TEMP_FACTOR), m_coolingFactor(DEFAULT_COOLING_FACTOR), m_iterations(DEFAUT_ITERATIONS), 
 	  m_maxPartitionSize(DEFAULT_MAX_PARTITION_SIZE), m_pTerm(DEFAULT_PTERM) {
 	addInParameter<unsigned int>("iterations", "", "300", false);
+	addInParameter<unsigned int>("max disp", "", "200", false);
+	addInParameter<float>("ideal edge length", "", "10", false);
+	addInParameter<float>("threshold", "", "0.1", false);
 	addInParameter<bool>("adaptive cooling", "", "", false);
-	addInParameter<bool>("linear median", "", "true", false);
+	addInParameter<bool>("stopping criterion", "", "", false);
 	addInParameter<bool>("multipole expansion", "", "", false);
 	addInParameter<bool>("block nodes", "If true, only nodes in the set \"movable nodes\" will move.", "", false);
 	addInParameter<tlp::BooleanProperty>("movable nodes", "Set of nodes allowed to move. Only taken into account if \"blocked nodes\" is true", "", false);
@@ -60,13 +63,22 @@ bool CustomLayout::check(std::string &errorMessage) {
 
 	bool btemp = false;
 	int itemp = 0;
+	float ftemp = 0.0f;
 	tlp::BooleanProperty *temp;
 
 	if (dataSet != nullptr) {
 		if (dataSet->get("iterations", itemp))
 			m_iterations = itemp;
+		if (dataSet->get("max disp", itemp))
+			m_maxDisp = itemp;
+		if (dataSet->get("ideal edge length", ftemp))
+			m_L = ftemp;
+		if (dataSet->get("threshold", ftemp))
+			m_threshold = ftemp;
 		if (dataSet->get("adaptive cooling", btemp))
 			m_adaptiveCooling = btemp;
+		if (dataSet->get("stopping criterion", btemp))
+			m_stoppingCriterion = btemp;
 		if (dataSet->get("multipole expansion", btemp))
 			m_multipoleExpansion = btemp;
 		if (dataSet->get("block nodes", btemp))
@@ -94,7 +106,8 @@ bool CustomLayout::run() {
 	KNode *kdTree = buildKdTree(false, nullptr);
 	bool quit = false;
 	unsigned int i = 1;
-
+	float averageDisp = 0;
+	
 	std::cout << "Initial temperature: " << m_temp << std::endl;
 	std::string message = "Initial temperature: ";
 	message += std::to_string(m_temp);
@@ -129,20 +142,27 @@ bool CustomLayout::run() {
 		#pragma omp parallel for
 		for (unsigned int i = 0; i < m_nodesCopy.size(); i++) { // update positions
 			const tlp::node &n = m_nodesCopy[i];
-			float disp_norm = m_disp[n].norm();
+			float dispNorm = m_disp[n].norm();
 			
-			if (disp_norm != 0) {  
+			if (dispNorm != 0) {  
 				if (m_adaptiveCooling) {
-					m_disp[n] *= std::min(adaptativeCool(n), 200.0f) / disp_norm;
-				} else if (!m_adaptiveCooling && m_temp < disp_norm) {
-					m_disp[n] *= m_temp / disp_norm;
+					m_disp[n] *= std::min(adaptativeCool(n), m_maxDisp) / dispNorm;
+				} else if (!m_adaptiveCooling && m_temp < dispNorm) {
+					m_disp[n] *= m_temp / dispNorm;
 				}				
 			}
 
 			m_pos[n] += m_disp[n];
+			averageDisp += dispNorm;
 			m_dispPrev[n] = m_disp[n];
 			m_disp[n] = tlp::Coord(0);
 		}
+
+		// averageDisp /= m_nodesCopy.size();
+		// averageDisp = 0;
+
+		if (m_stoppingCriterion && m_temp <= m_threshold)
+			quit = true;
 
 		if (!m_adaptiveCooling && !m_cstTemp)
 			m_temp *= m_coolingFactor;

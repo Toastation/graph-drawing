@@ -70,7 +70,11 @@ bool FMMMIncremental::run() {
     tlp::LayoutProperty *previousPos = graph->getProperty<tlp::LayoutProperty>("viewLayout");
     tlp::LayoutProperty *currentPos;
     tlp::ColorProperty *currentColors;
+    std::string message;
     for (unsigned int i = 0; i < subgraphs.size(); ++i) {
+        message = "Computing timeline... " + i;
+        message += "/ " + subgraphs.size();
+        pluginProgress->setComment(message);
         currentPos = subgraphs[i]->getLocalProperty<tlp::LayoutProperty>("viewLayout"); // overwriting global property "viewLayout", it is now empty however
         currentColors = subgraphs[i]->getLocalProperty<tlp::ColorProperty>("viewColor");     
         currentPos->copy(previousPos);
@@ -84,6 +88,7 @@ bool FMMMIncremental::run() {
         }
         subgraphs[i]->applyPropertyAlgorithm("Custom Layout", currentPos, errorMessage, nullptr, &ds);
         previousPos = currentPos;
+        pluginProgress->progress(i, subgraphs.size());
     }
     return true;
 }

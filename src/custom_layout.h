@@ -90,6 +90,7 @@ private:
 	bool m_condition; // Whether or not to block certain nodes.
 	bool m_multipoleExpansion; // Whether or not to use the multipole extension formula
 	bool m_adaptiveCooling; //
+	bool m_stoppingCriterion;
 	float m_L; // Ideal edge length
 	float m_Kr; // Repulsive force constant
 	float m_Ks; // Spring force constant
@@ -97,6 +98,8 @@ private:
 	float m_initTempFactor; // Factor to apply on the initial annealing temperature (if m_cstInitTemp is false)
 	float m_coolingFactor; // Cooling rate of the annealing temperature
 	float m_temp; // Global temperature of the graph
+	float m_threshold;
+	float m_maxDisp;
 	unsigned int m_iterations; // Number of iterations
 	unsigned int m_maxPartitionSize; // Maximum number of nodes of the smallest partition of the graph (via KD-tree)
 	unsigned int m_pTerm; // Number of term to compute in the p-term multipole expansion
