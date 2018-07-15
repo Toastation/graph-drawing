@@ -25,6 +25,8 @@ const float DEFAULT_KS = 1.0f;
 const float DEFAULT_INIT_TEMP = 200.0f;
 const float DEFAULT_INIT_TEMP_FACTOR = 0.2f;
 const float DEFAULT_COOLING_FACTOR = 0.95f;
+const float DEFAULT_MAX_DISP = 200.0f;
+const float DEFAULT_THRESHOLD = 0.1f;
 const unsigned int DEFAULT_MAX_PARTITION_SIZE = 4;
 const unsigned int DEFAULT_PTERM = 4;
 const unsigned int DEFAUT_ITERATIONS = 300;
@@ -38,8 +40,8 @@ PLUGIN(CustomLayout)
 
 CustomLayout::CustomLayout(const tlp::PluginContext *context) 
 	: LayoutAlgorithm(context), m_cstTemp(DEFAUT_CST_TEMP), m_cstInitTemp(DEFAUT_CST_INIT_TEMP), m_L(DEFAULT_L), m_Kr(DEFAULT_KR), m_Ks(DEFAULT_KS),
-	  m_initTemp(DEFAULT_INIT_TEMP), m_initTempFactor(DEFAULT_INIT_TEMP_FACTOR), m_coolingFactor(DEFAULT_COOLING_FACTOR), m_iterations(DEFAUT_ITERATIONS), 
-	  m_maxPartitionSize(DEFAULT_MAX_PARTITION_SIZE), m_pTerm(DEFAULT_PTERM) {
+	  m_initTemp(DEFAULT_INIT_TEMP), m_initTempFactor(DEFAULT_INIT_TEMP_FACTOR), m_coolingFactor(DEFAULT_COOLING_FACTOR), m_threshold(DEFAULT_THRESHOLD), m_maxDisp(DEFAULT_MAX_DISP), 
+	  m_iterations(DEFAUT_ITERATIONS), m_maxPartitionSize(DEFAULT_MAX_PARTITION_SIZE), m_pTerm(DEFAULT_PTERM) {
 	addInParameter<unsigned int>("max iterations", "The maximum number of iterations of the algorithm.", "300", false);
 	addInParameter<unsigned int>("max displacement", "The maximum length a node can move. Very high values or very low values may result in chaotic behavior.", "200", false);
 	addInParameter<float>("ideal edge length", "The ideal edge length.", "10", false);
@@ -113,7 +115,6 @@ bool CustomLayout::run() {
 	bool quit = false;
 	unsigned int it = 1;
 	float averageDisp = 0;
-	float init_temp = m_temp;
 	
 	std::cout << "Initial temperature: " << m_temp << std::endl;
 	std::string message = "Initial temperature: ";
@@ -126,9 +127,10 @@ bool CustomLayout::run() {
 			buildKdTree(true, kdTree);
 		}
 
-		for (auto n : m_nodesCopy) {
-			if (!m_condition || m_canMove->getNodeValue(n))
-				computeReplForces(n, kdTree);
+		#pragma omp parallel for
+		for (unsigned int i = 0; i < m_nodesCopy.size(); ++i) {
+			if (!m_condition || m_canMove->getNodeValue(m_nodesCopy[i]))
+				computeReplForces(m_nodesCopy[i], kdTree);
 		}
 
 		//compute attractive forces TODO: find a way to parallelize
@@ -150,27 +152,29 @@ bool CustomLayout::run() {
 		for (unsigned int i = 0; i < m_nodesCopy.size(); i++) { // update positions
 			const tlp::node &n = m_nodesCopy[i];
 			float dispNorm = m_disp[n].norm();
+			float cooledNorm = dispNorm;
 			
 			if (dispNorm != 0) {  
 				if (m_adaptiveCooling) {
-					m_disp[n] *= std::min(adaptativeCool(n), m_maxDisp) / dispNorm;
+					cooledNorm = std::min(adaptativeCool(n), m_maxDisp);
+					m_disp[n] *=  cooledNorm / dispNorm;
 				} else if (!m_adaptiveCooling && m_temp < dispNorm) {
-					m_disp[n] *= m_temp / dispNorm;
+					cooledNorm = m_temp;
+					m_disp[n] *= cooledNorm / dispNorm;
 				}				
 			}
 
+			averageDisp += cooledNorm;
 			m_pos[n] += m_disp[n];
-			averageDisp += dispNorm;
 			m_dispPrev[n] = m_disp[n];
 			m_disp[n] = tlp::Coord(0);
 		}
 
-		averageDisp /= m_nodesCopy.size();
-		std::cout << it << " | " << averageDisp << std::endl;
+		// averageDisp /= m_nodesCopy.size();
+		// std::cout << it << " | " << averageDisp << std::endl;
+		// if (m_stoppingCriterion && m_temp <= m_threshold)
+		// 	quit = true;
 		averageDisp = 0;
-
-		if (m_stoppingCriterion && m_temp <= m_threshold)
-			quit = true;
 
 		if (!m_adaptiveCooling && !m_cstTemp)
 			m_temp *= m_coolingFactor;
