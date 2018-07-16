@@ -41,19 +41,31 @@ PLUGIN(CustomLayout)
 CustomLayout::CustomLayout(const tlp::PluginContext *context) 
 	: LayoutAlgorithm(context), m_L(DEFAULT_L), m_Kr(DEFAULT_KR), m_Ks(DEFAULT_KS),
 	  m_initTemp(DEFAULT_INIT_TEMP), m_initTempFactor(DEFAULT_INIT_TEMP_FACTOR), m_coolingFactor(DEFAULT_COOLING_FACTOR), m_threshold(DEFAULT_THRESHOLD), m_maxDisp(DEFAULT_MAX_DISP), 
-	  m_iterations(DEFAUT_ITERATIONS), m_maxPartitionSize(DEFAULT_MAX_PARTITION_SIZE), m_pTerm(DEFAULT_PTERM) {
-	addInParameter<unsigned int>("max iterations", "The maximum number of iterations of the algorithm.", "300", false);
-	addInParameter<unsigned int>("max displacement", "The maximum length a node can move. Very high values or very low values may result in chaotic behavior.", "200", false);
-	addInParameter<float>("ideal edge length", "The ideal edge length.", "10", false);
-	addInParameter<float>("spring force strength", "Factor of the spring force", "1", false);
-	addInParameter<float>("repulsive force strength", "Factor of the repulsive force", "100", false);
-	addInParameter<float>("convergence threshold", "If the average node energy is lower than this threshold, the graph is considered to have converged and the algorithm stops. Only taken into consideration if \"stopping criterion\" is true", "0.1", false);
+	  m_iterations(DEFAUT_ITERATIONS), m_refinementIterations(DEFAULT_REFINEMENT_ITERATIONS), m_refinementFreq(DEFAULT_REFINEMENT_FREQ),
+	  m_maxPartitionSize(DEFAULT_MAX_PARTITION_SIZE), m_pTerm(DEFAULT_PTERM) {
 	addInParameter<bool>("adaptive cooling", "If true, the algo uses a local cooling function based on the angle between each node's movement. Else it uses a global linear cooling function.", "", false);
 	addInParameter<bool>("stopping criterion", "If true, stops the algo before the maximum number of iterations if the graph has converged. See \"convergence threshold\"", "", false);
 	addInParameter<bool>("multipole expansion", "If true, apply a 4-term multipole expansion for more accurate layout. May affect performances.", "", false);
 	addInParameter<bool>("block nodes", "If true, only nodes in the set \"movable nodes\" will move.", "", false);
+	addInParameter<bool>("refinement", "", "", false);	
+	addInParameter<unsigned int>("max iterations", "The maximum number of iterations of the algorithm.", "300", false);
+	addInParameter<unsigned int>("max displacement", "The maximum length a node can move. Very high values or very low values may result in chaotic behavior.", "200", false);
+	addInParameter<unsigned int>("refinement iterations", "", "20", false);
+	addInParameter<unsigned int>("refinement frequency", "", "10", false);	
+	addInParameter<float>("ideal edge length", "The ideal edge length.", "10", false);
+	addInParameter<float>("spring force strength", "Factor of the spring force", "1", false);
+	addInParameter<float>("repulsive force strength", "Factor of the repulsive force", "100", false);
+	addInParameter<float>("convergence threshold", "If the average node energy is lower than this threshold, the graph is considered to have converged and the algorithm stops. Only taken into consideration if \"stopping criterion\" is true", "0.1", false);
 	addInParameter<tlp::BooleanProperty>("movable nodes", "Set of nodes allowed to move. Only taken into account if \"blocked nodes\" is true", "", false);
 	addDependency("Connected Component Packing", "1.0");
+	m_cstTemp = false;
+	m_cstInitTemp = false;
+	m_condition = false;
+	m_multipoleExpansion = false;
+	m_adaptiveCooling = false;
+	m_stoppingCriterion = false;
+	m_refinement = false;
+
 }
 
 CustomLayout::~CustomLayout() {
@@ -61,52 +73,6 @@ CustomLayout::~CustomLayout() {
 }
 
 bool CustomLayout::check(std::string &errorMessage) {
-	m_cstTemp = false;
-	m_cstInitTemp = false;
-	m_condition = false;
-	m_multipoleExpansion = false;
-	m_adaptiveCooling = false;
-	m_refinement = false;
-
-	bool btemp = false;
-	int itemp = 0;
-	float ftemp = 0.0f;
-	tlp::BooleanProperty *temp;
-
-	if (dataSet != nullptr) {
-		if (dataSet->get("max iterations", itemp))
-			m_iterations = itemp;
-		if (dataSet->get("max displacement", itemp))
-			m_maxDisp = itemp;
-		if (dataSet->get("ideal edge length", ftemp))
-			m_L = ftemp;
-		if (dataSet->get("spring force strength", ftemp))
-			m_Ks = ftemp;
-		if (dataSet->get("repulsive force strength", ftemp))
-			m_Kr = ftemp;
-		if (dataSet->get("convergence threshold", ftemp))
-			m_threshold = ftemp;
-		if (dataSet->get("adaptive cooling", btemp))
-			m_adaptiveCooling = btemp;
-		if (dataSet->get("stopping criterion", btemp))
-			m_stoppingCriterion = btemp;
-		if (dataSet->get("multipole expansion", btemp))
-			m_multipoleExpansion = btemp;
-		if (dataSet->get("block nodes", btemp))
-			m_condition = btemp;
-		if (dataSet->get("movable nodes", temp))
-			m_canMove = temp;
-		else if (m_condition) {
-			pluginProgress->setError("\"block nodes\" parameter is true but no BooleanProperty was given. Check parameter \"movable nodes\"");
-			return false;
-		}
-	}
-	
-	result->copy(graph->getProperty<tlp::LayoutProperty>("viewLayout"));
-	m_size = graph->getLocalProperty<tlp::SizeProperty>("viewSize");
-	m_rot = graph->getLocalProperty<tlp::DoubleProperty>("viewRotation");
-	
-	result->setAllEdgeValue(std::vector<tlp::Vec3f>(0));
 
 	return true;
 }
@@ -217,7 +183,47 @@ bool CustomLayout::run() {
 	return true;
 }
 
-void CustomLayout::init() {
+bool CustomLayout::init() {
+	bool btemp = false;
+	int itemp = 0;
+	float ftemp = 0.0f;
+	tlp::BooleanProperty *temp;
+
+	if (dataSet != nullptr) {
+		if (dataSet->get("max iterations", itemp))
+			m_iterations = itemp;
+		if (dataSet->get("max displacement", itemp))
+			m_maxDisp = itemp;
+		if (dataSet->get("ideal edge length", ftemp))
+			m_L = ftemp;
+		if (dataSet->get("spring force strength", ftemp))
+			m_Ks = ftemp;
+		if (dataSet->get("repulsive force strength", ftemp))
+			m_Kr = ftemp;
+		if (dataSet->get("convergence threshold", ftemp))
+			m_threshold = ftemp;
+		if (dataSet->get("adaptive cooling", btemp))
+			m_adaptiveCooling = btemp;
+		if (dataSet->get("stopping criterion", btemp))
+			m_stoppingCriterion = btemp;
+		if (dataSet->get("multipole expansion", btemp))
+			m_multipoleExpansion = btemp;
+		if (dataSet->get("block nodes", btemp))
+			m_condition = btemp;
+		if (dataSet->get("movable nodes", temp))
+			m_canMove = temp;
+		else if (m_condition) {
+			pluginProgress->setError("\"block nodes\" parameter is true but no BooleanProperty was given. Check parameter \"movable nodes\"");
+			return false;
+		}
+	}
+	
+	result->copy(graph->getProperty<tlp::LayoutProperty>("viewLayout"));
+	m_size = graph->getLocalProperty<tlp::SizeProperty>("viewSize");
+	m_rot = graph->getLocalProperty<tlp::DoubleProperty>("viewRotation");
+
+	result->setAllEdgeValue(std::vector<tlp::Vec3f>(0));
+
 	m_nodesCopy = graph->nodes();
 	
 	tlp::BoundingBox bb = tlp::computeBoundingBox(graph, result, m_size, m_rot);
@@ -228,6 +234,7 @@ void CustomLayout::init() {
 		m_dispPrev[n] = tlp::Coord(0, 0, 0);
 		m_pos[n] = result->getNodeValue(n);
 	}
+	return true;
 }
 
 float CustomLayout::adaptativeCool(const tlp::node &n) {

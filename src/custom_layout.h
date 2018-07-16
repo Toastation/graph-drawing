@@ -117,8 +117,9 @@ private:
 
 	/**
 	 * @brief Prepares the algo (initialises hashmaps, etc) 
+	 * @return Returns whether or not the initalisation has been successful
 	 */
-	void init();
+	bool init();
 
 	/**
 	 * @brief Computes local temperature for each node 
