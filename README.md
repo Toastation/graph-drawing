@@ -1,6 +1,6 @@
 Description
 ---
-The goal of this project is to propose a method to compute layouts of dynamic graphs with [Tulip](http://tulip.labri.fr/). 
+The goal of this project is to propose a method to compute dynamic graph layouts with the [Tulip framework](http://tulip.labri.fr/). 
 The project consists of the 2 following plugins:
 
 * _Incremental_
@@ -13,10 +13,9 @@ The project consists of the 2 following plugins:
 
 A Python script (`src\morph.py`) that runs an animation of a dynamic graph is also available.
 
-
 Compiling the plugins
 ---
-To compile the plugins, place the files `src/custom_layout.cpp`, `src/custom_layout.h`, `src/incremental.cpp` and`src/incremental.h` in the externalplugins directory of the tulip sources, and recompile. You can also use the shell scripts `src/comp_*.sh`.
+To compile the plugins, place the files `src/custom_layout.cpp`, `src/custom_layout.h`, `src/incremental.cpp` and `src/incremental.h` in the externalplugins directory of the tulip sources, and recompile. You can also use the shell scripts `src/comp_*.sh`.
 
 Dynamic graph format (graph hierarchy): 
 ---
