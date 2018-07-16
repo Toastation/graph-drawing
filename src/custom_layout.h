@@ -37,7 +37,7 @@ struct KNode {
 			return 0;
 		return 1 + std::max(leftChild->depth(), rightChild->depth());
 	}
-
+	
 	void print() {
 		std::cout << "start: " << start << " | end: " << end << " | span: " << end - start << std::endl;
 		std::cout << "center: " << center << " | radius: " << radius << " | depth: " << depth() << std::endl;
@@ -89,8 +89,9 @@ private:
 	bool m_cstInitTemp; // Whether or not the initial annealing temperature is predefined. If false, it is the the initial temperature is sqrt(|V|) 
 	bool m_condition; // Whether or not to block certain nodes.
 	bool m_multipoleExpansion; // Whether or not to use the multipole extension formula
-	bool m_adaptiveCooling; //
-	bool m_stoppingCriterion;
+	bool m_adaptiveCooling; // Whether or not to use the local adaptive cooling strategy
+	bool m_stoppingCriterion; // Whether or not to stop the algo earlier if convergence has been detected
+	bool m_refinement; // Whether or not to use the refinement strategy.
 	float m_L; // Ideal edge length
 	float m_Kr; // Repulsive force constant
 	float m_Ks; // Spring force constant
@@ -98,9 +99,11 @@ private:
 	float m_initTempFactor; // Factor to apply on the initial annealing temperature (if m_cstInitTemp is false)
 	float m_coolingFactor; // Cooling rate of the annealing temperature
 	float m_temp; // Global temperature of the graph
-	float m_threshold;
-	float m_maxDisp;
+	float m_threshold; // The convergence threshold
+	float m_maxDisp; // Maximum displament allowed for nodes.
 	unsigned int m_iterations; // Number of iterations
+	unsigned int m_refinementIterations; // Number of iterations of the refinement process
+	unsigned int m_refinementFreq; // Number of iterations in between refinement steps
 	unsigned int m_maxPartitionSize; // Maximum number of nodes of the smallest partition of the graph (via KD-tree)
 	unsigned int m_pTerm; // Number of term to compute in the p-term multipole expansion
 	tlp::BooleanProperty *m_canMove; // Which nodes are able to move during the algorithm
@@ -110,6 +113,7 @@ private:
 	TLP_HASH_MAP<tlp::node, tlp::Coord> m_disp; // Displacement of each node
 	TLP_HASH_MAP<tlp::node, tlp::Coord> m_dispPrev; // Displacement of each during the previous iteration
 	TLP_HASH_MAP<tlp::node, tlp::Coord> m_pos; // Current position of each node
+	TLP_HASH_MAP<tlp::node, float> m_energy; // Current energy of each node
 
 	/**
 	 * @brief Prepares the algo (initialises hashmaps, etc) 
@@ -167,8 +171,11 @@ private:
 	 * @brief Computes the repulsives forces that the node is subect to
 	 * @param n The node on which to compute the forces
 	 * @param kdTree The kd-tree used to approximate the forces
+	 * @param computeEnergy If true, computes the node's energy 
 	 */
-	void computeReplForces(const tlp::node &n, KNode *kdTree);
+	void computeReplForces(const tlp::node &n, KNode *kdTree, bool computeEnergy);
+
+	void refinement();
 
 	/**
 	 * @brief Computes the repulsive force between two nodes

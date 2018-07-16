@@ -17,16 +17,16 @@
 #include <algorithm>
 #include <chrono>
 
-const bool DEFAUT_CST_TEMP = false;
-const bool DEFAUT_CST_INIT_TEMP = false;
 const float DEFAULT_L = 10.0f;
 const float DEFAULT_KR = 100.0f;
 const float DEFAULT_KS = 1.0f;
 const float DEFAULT_INIT_TEMP = 200.0f;
 const float DEFAULT_INIT_TEMP_FACTOR = 0.2f;
 const float DEFAULT_COOLING_FACTOR = 0.95f;
-const float DEFAULT_MAX_DISP = 200.0f;
 const float DEFAULT_THRESHOLD = 0.1f;
+const float DEFAULT_MAX_DISP = 200.0f;
+const unsigned int DEFAULT_REFINEMENT_ITERATIONS = 20;
+const unsigned int DEFAULT_REFINEMENT_FREQ = 10;
 const unsigned int DEFAULT_MAX_PARTITION_SIZE = 4;
 const unsigned int DEFAULT_PTERM = 4;
 const unsigned int DEFAUT_ITERATIONS = 300;
@@ -39,7 +39,7 @@ const float f4_PI_6 = 4.0f * fPI_6;
 PLUGIN(CustomLayout)
 
 CustomLayout::CustomLayout(const tlp::PluginContext *context) 
-	: LayoutAlgorithm(context), m_cstTemp(DEFAUT_CST_TEMP), m_cstInitTemp(DEFAUT_CST_INIT_TEMP), m_L(DEFAULT_L), m_Kr(DEFAULT_KR), m_Ks(DEFAULT_KS),
+	: LayoutAlgorithm(context), m_L(DEFAULT_L), m_Kr(DEFAULT_KR), m_Ks(DEFAULT_KS),
 	  m_initTemp(DEFAULT_INIT_TEMP), m_initTempFactor(DEFAULT_INIT_TEMP_FACTOR), m_coolingFactor(DEFAULT_COOLING_FACTOR), m_threshold(DEFAULT_THRESHOLD), m_maxDisp(DEFAULT_MAX_DISP), 
 	  m_iterations(DEFAUT_ITERATIONS), m_maxPartitionSize(DEFAULT_MAX_PARTITION_SIZE), m_pTerm(DEFAULT_PTERM) {
 	addInParameter<unsigned int>("max iterations", "The maximum number of iterations of the algorithm.", "300", false);
@@ -61,9 +61,12 @@ CustomLayout::~CustomLayout() {
 }
 
 bool CustomLayout::check(std::string &errorMessage) {
+	m_cstTemp = false;
+	m_cstInitTemp = false;
 	m_condition = false;
 	m_multipoleExpansion = false;
 	m_adaptiveCooling = false;
+	m_refinement = false;
 
 	bool btemp = false;
 	int itemp = 0;
@@ -130,7 +133,7 @@ bool CustomLayout::run() {
 		#pragma omp parallel for
 		for (unsigned int i = 0; i < m_nodesCopy.size(); ++i) {
 			if (!m_condition || m_canMove->getNodeValue(m_nodesCopy[i]))
-				computeReplForces(m_nodesCopy[i], kdTree);
+				computeReplForces(m_nodesCopy[i], kdTree, false);
 		}
 
 		//compute attractive forces TODO: find a way to parallelize
@@ -364,7 +367,7 @@ KNode* CustomLayout::buildKdTree(bool refresh, KNode *root=nullptr) {
 	return root;
 }
 
-void CustomLayout::computeReplForces(const tlp::node &n, KNode *kdTree) {
+void CustomLayout::computeReplForces(const tlp::node &n, KNode *kdTree, bool computeEnergy) {
 	if (kdTree == nullptr) {
 		pluginProgress->setError("nullptr kdTree in CustomLayout::computeReplForces");
 		return;
@@ -403,8 +406,8 @@ void CustomLayout::computeReplForces(const tlp::node &n, KNode *kdTree) {
 	}
 	// internal node case and n is inside the partition -> continue through the kd-tree 
 	else { 
-		computeReplForces(n, kdTree->leftChild);
-		computeReplForces(n, kdTree->rightChild);
+		computeReplForces(n, kdTree->leftChild, computeEnergy);
+		computeReplForces(n, kdTree->rightChild, computeEnergy);
 	}
 }
 
