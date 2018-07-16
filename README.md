@@ -4,11 +4,11 @@ The project is made of 2 [Tulip](http://tulip.labri.fr/) plugins. They can be ru
 
 * _Incremental_
 
-... This plugin computes the layout of a dynamic graph. The format of a dynamic graph is specified in the later section "Dynamic graph format".
+   This plugin computes the layout of a dynamic graph. The format of a dynamic graph is specified in the later section "Dynamic graph format".
 
 * _Custom Layout_
 
-... This plugin computes the static layout of a graph.
+   This plugin computes the static layout of a graph.
 
 You can also find a Python script `src\morph.py` that runs an animation of a dynamic graph after it has been processed by the Incremental plugin.
 
@@ -19,10 +19,10 @@ To compile the plugins, place the files ```src/custom_layout.cpp```, ```src/cust
 
 Dynamic graph format (graph hierarchy): 
 ---
-In our case a dynamic graph is represented via a certain graph hierarchy in Tulip. 
-The root graph must contain all the nodes and edges of the timeline. The subgraphs of this root graph represent the differents steps of the timeline. 
-If a node or edge exists in both step i and i+1 of the timeline then it must be the same shared tulip node/edge.
-For now, the direction of the timeline follows the increasing order of the subgraphs id.
+In our case a dynamic graph is represented via a certain graph hierarchy in Tulip.  
+The root graph must contain all the nodes and edges of the timeline. The subgraphs of this root graph represent the differents steps of the timeline.  
+If a node or edge exists in both step i and i+1 of the timeline then it must be the same shared tulip node/edge.  
+For now, the direction of the timeline follows the increasing order of the subgraphs id.  
 
 ![Graph hierarchy example](https://i.imgur.com/1Sj3qLQ.png "Graph hierarchy example")
 
