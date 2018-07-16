@@ -73,12 +73,13 @@ CustomLayout::~CustomLayout() {
 }
 
 bool CustomLayout::check(std::string &errorMessage) {
-
+	// TODO: check if the graph is simple
 	return true;
 }
 
 bool CustomLayout::run() {
-	init();
+	if (!init())
+		return false;
 
 	KNode *kdTree = buildKdTree(false, nullptr);
 	bool quit = false;
@@ -96,6 +97,7 @@ bool CustomLayout::run() {
 			buildKdTree(true, kdTree);
 		}
 
+		// compute repulsive forces
 		#pragma omp parallel for
 		for (unsigned int i = 0; i < m_nodesCopy.size(); ++i) {
 			if (!m_condition || m_canMove->getNodeValue(m_nodesCopy[i]))
@@ -122,7 +124,6 @@ bool CustomLayout::run() {
 			const tlp::node &n = m_nodesCopy[i];
 			float dispNorm = m_disp[n].norm();
 			float cooledNorm = dispNorm;
-			
 			if (dispNorm != 0) {  
 				if (m_adaptiveCooling) {
 					cooledNorm = std::min(adaptativeCool(n), m_maxDisp);
@@ -132,29 +133,26 @@ bool CustomLayout::run() {
 					m_disp[n] *= cooledNorm / dispNorm;
 				}				
 			}
-
 			averageDisp += cooledNorm;
 			m_pos[n] += m_disp[n];
 			m_dispPrev[n] = m_disp[n];
 			m_disp[n] = tlp::Coord(0);
 		}
 
-		// averageDisp /= m_nodesCopy.size();
-		// std::cout << it << " | " << averageDisp << std::endl;
-		// if (m_stoppingCriterion && m_temp <= m_threshold)
-		// 	quit = true;
+		if (m_stoppingCriterion && averageDisp <= m_threshold)
+			quit = true;
 		averageDisp = 0;
 
 		if (!m_adaptiveCooling && !m_cstTemp)
 			m_temp *= m_coolingFactor;
 
-		quit = it >= m_iterations || quit;
+		quit = it > m_iterations || quit;
 		++it;
 
-		// pluginProgress->progress(i, m_iterations+2);
-		// if (pluginProgress->state() != tlp::TLP_CONTINUE) {
-		// 	break;
-		// }
+		pluginProgress->progress(it, m_iterations + 1);
+		if (pluginProgress->state() != tlp::TLP_CONTINUE) {
+			break;
+		}
 	}
 
 	deleteTree(kdTree);
@@ -172,7 +170,6 @@ bool CustomLayout::run() {
 		ds.set("coordinates", result);
 		graph->applyPropertyAlgorithm("Connected Component Packing", &tmpLayout, errorMessage, pluginProgress, &ds);
 		*result = tmpLayout;
-		return true;
 	}
 
 	auto end = std::chrono::high_resolution_clock::now();

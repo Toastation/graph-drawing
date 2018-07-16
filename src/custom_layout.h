@@ -172,9 +172,15 @@ private:
 	 * @brief Computes the repulsives forces that the node is subect to
 	 * @param n The node on which to compute the forces
 	 * @param kdTree The kd-tree used to approximate the forces
-	 * @param computeEnergy If true, computes the node's energy 
+	 * @param computeEnergy If true, computes the node's energy (for the refinement step) 
 	 */
 	void computeReplForces(const tlp::node &n, KNode *kdTree, bool computeEnergy);
+
+	/**
+	 * @brief Computes the attratives forces for all edges
+	 * @param computeEnergy If true, computes the node's energy (for the refinement step)
+	 */
+	void computeAttrForces(bool computeEnergy);
 
 	void refinement();
 
