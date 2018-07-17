@@ -37,6 +37,17 @@ struct KNode {
 			return 0;
 		return 1 + std::max(leftChild->depth(), rightChild->depth());
 	}
+
+	unsigned int size() {
+		if (isLeaf())
+			return 1;
+		unsigned int s = 1;
+		if (leftChild != nullptr)
+			s += leftChild->size(); 
+		if (rightChild != nullptr)
+			s += rightChild->size();
+		return s;
+	}
 	
 	void print() {
 		std::cout << "start: " << start << " | end: " << end << " | span: " << end - start << std::endl;

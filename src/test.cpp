@@ -10,15 +10,18 @@
 int main() {
     tlp::initTulipLib();
     
-    std::ofstream out("out.txt");
-    std::cout.rdbuf(out.rdbuf());
+    // std::ofstream out("out.txt");
+    // std::cout.rdbuf(out.rdbuf());
 
-    tlp::Graph *graph = tlp::loadGraph("C:/Users/Melvin.Melvin-PC/Desktop/work/graph-drawing/dataset/n300.json");
+    tlp::Graph *graph = tlp::loadGraph("C:/Users/Melvin.Melvin-PC/Desktop/work/graph-drawing/dataset/n1000.json");
 
     std::string errorMessage;
     tlp::LayoutProperty *layout = graph->getLocalProperty<tlp::LayoutProperty>("viewLayout");
     tlp::DataSet ds;
-    ds.set("adaptive cooling", false);
+    // ds.set("adaptive cooling", false);
+    // ds.set("refinement", true);
+    // ds.set("refinement iterations", 20);
+    // ds.set("refinement frequency", 10);    
     // graph->applyAlgorithm("Incremental", errorMessage);
     graph->applyPropertyAlgorithm("Custom Layout", layout, errorMessage, nullptr, &ds);
 

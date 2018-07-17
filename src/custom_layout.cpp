@@ -25,6 +25,7 @@ const float DEFAULT_INIT_TEMP_FACTOR = 0.2f;
 const float DEFAULT_COOLING_FACTOR = 0.95f;
 const float DEFAULT_THRESHOLD = 0.1f;
 const float DEFAULT_MAX_DISP = 200.0f;
+const float MULTIPOLE_EXPANSION_FACTOR = 100.0f;
 const unsigned int DEFAULT_REFINEMENT_ITERATIONS = 20;
 const unsigned int DEFAULT_REFINEMENT_FREQ = 10;
 const unsigned int DEFAULT_MAX_PARTITION_SIZE = 4;
@@ -35,6 +36,12 @@ const float fPI_6 = M_PI / 6.0f;
 const float f2_PI_6 = 2.0f * fPI_6;
 const float f3_PI_6 = 3.0f * fPI_6;
 const float f4_PI_6 = 4.0f * fPI_6;
+
+std::chrono::duration<double> dur1;
+std::chrono::duration<double> dur2;
+std::chrono::duration<double> dur3;
+std::chrono::duration<double> dur4;
+unsigned int count = 0;
 
 PLUGIN(CustomLayout)
 
@@ -65,7 +72,6 @@ CustomLayout::CustomLayout(const tlp::PluginContext *context)
 	m_adaptiveCooling = false;
 	m_stoppingCriterion = false;
 	m_refinement = false;
-
 }
 
 CustomLayout::~CustomLayout() {
@@ -83,6 +89,7 @@ bool CustomLayout::run() {
 
 	KNode *kdTree = buildKdTree(false, nullptr);
 	bool quit = false;
+	bool refinement = false;
 	unsigned int it = 1;
 	float averageDisp = 0;
 	
@@ -93,18 +100,28 @@ bool CustomLayout::run() {
 	auto start = std::chrono::high_resolution_clock::now();
 
 	while (!quit) {
-		if (it <= 4 || it % 20 == 0) { 
+		auto start = std::chrono::high_resolution_clock::now();
+		if (it <= 4 || it % 20 == 0) 
 			buildKdTree(true, kdTree);
-		}
+		auto end = std::chrono::high_resolution_clock::now();
+		dur1 += end - start;
+
+		refinement = m_refinement && it % m_refinementFreq == 0;
 
 		// compute repulsive forces
-		#pragma omp parallel for
+		start = std::chrono::high_resolution_clock::now();
+		#pragma omp parallel for reduction(+:count)
 		for (unsigned int i = 0; i < m_nodesCopy.size(); ++i) {
 			if (!m_condition || m_canMove->getNodeValue(m_nodesCopy[i]))
-				computeReplForces(m_nodesCopy[i], kdTree, false);
+				computeReplForces(m_nodesCopy[i], kdTree, refinement);
 		}
+		std::cout << "count: " << count << std::endl;
+		count = 0;
+		end = std::chrono::high_resolution_clock::now();
+		dur2 += end - start;
 
 		//compute attractive forces TODO: find a way to parallelize
+		start = std::chrono::high_resolution_clock::now();
 		for (auto e : graph->edges()) { 
 			const tlp::node &u = graph->source(e);
 			const tlp::node &v = graph->target(e);
@@ -112,13 +129,20 @@ bool CustomLayout::run() {
 			dist *= computeAttrForce(dist);
 			if (!m_condition || m_canMove->getNodeValue(u)) {
 		 		m_disp[u] -= dist;
+				if (refinement)
+					m_energy[u] += computeAttrForceIntgr(dist);
 			}
 			if (!m_condition || m_canMove->getNodeValue(v)) {
 				m_disp[v] += dist;
+				if (refinement)
+					m_energy[v] += computeAttrForceIntgr(dist);				
 			}
 		}
+		end = std::chrono::high_resolution_clock::now();
+		dur3 += end - start;
 
 		// update nodes position
+		start = std::chrono::high_resolution_clock::now();
 		#pragma omp parallel for
 		for (unsigned int i = 0; i < m_nodesCopy.size(); i++) { // update positions
 			const tlp::node &n = m_nodesCopy[i];
@@ -138,6 +162,8 @@ bool CustomLayout::run() {
 			m_dispPrev[n] = m_disp[n];
 			m_disp[n] = tlp::Coord(0);
 		}
+		end = std::chrono::high_resolution_clock::now();
+		dur4 += end - start;
 
 		if (m_stoppingCriterion && averageDisp <= m_threshold)
 			quit = true;
@@ -156,6 +182,12 @@ bool CustomLayout::run() {
 	}
 
 	deleteTree(kdTree);
+
+	std::cout << "dir 1: " << dur1.count() << std::endl;
+	std::cout << "dir 2: " << dur2.count() << std::endl;
+	std::cout << "dir 3: " << dur3.count() << std::endl;
+	std::cout << "dir 4: " << dur4.count() << std::endl;
+
 
 	// update result property
 	#pragma omp parallel for
@@ -185,11 +217,14 @@ bool CustomLayout::init() {
 	int itemp = 0;
 	float ftemp = 0.0f;
 	tlp::BooleanProperty *temp;
-
 	if (dataSet != nullptr) {
 		if (dataSet->get("max iterations", itemp))
 			m_iterations = itemp;
-		if (dataSet->get("max displacement", itemp))
+		if (dataSet->get("refinement iterations", itemp))
+			m_refinementIterations = itemp;
+		if (dataSet->get("refinement frequency", itemp))
+			m_refinementFreq = itemp;
+		if (dataSet->get("max displacement", ftemp))
 			m_maxDisp = itemp;
 		if (dataSet->get("ideal edge length", ftemp))
 			m_L = ftemp;
@@ -207,6 +242,8 @@ bool CustomLayout::init() {
 			m_multipoleExpansion = btemp;
 		if (dataSet->get("block nodes", btemp))
 			m_condition = btemp;
+		if (dataSet->get("refinement", btemp))
+			m_refinement = btemp;
 		if (dataSet->get("movable nodes", temp))
 			m_canMove = temp;
 		else if (m_condition) {
@@ -216,17 +253,17 @@ bool CustomLayout::init() {
 	}
 	
 	result->copy(graph->getProperty<tlp::LayoutProperty>("viewLayout"));
+	result->setAllEdgeValue(std::vector<tlp::Vec3f>(0));
+
 	m_size = graph->getLocalProperty<tlp::SizeProperty>("viewSize");
 	m_rot = graph->getLocalProperty<tlp::DoubleProperty>("viewRotation");
 
-	result->setAllEdgeValue(std::vector<tlp::Vec3f>(0));
-
-	m_nodesCopy = graph->nodes();
-	
 	tlp::BoundingBox bb = tlp::computeBoundingBox(graph, result, m_size, m_rot);
 	m_temp = m_cstInitTemp ? m_initTemp : std::max(std::min(bb.width(), bb.height()) * m_initTempFactor, 2 * m_L);
 
+	m_nodesCopy = graph->nodes();
 	for (auto n : m_nodesCopy) {
+		m_energy[n] = 0;
 		m_disp[n] = tlp::Coord(0, 0, 0);
 		m_dispPrev[n] = tlp::Coord(0, 0, 0);
 		m_pos[n] = result->getNodeValue(n);
@@ -241,7 +278,6 @@ float CustomLayout::adaptativeCool(const tlp::node &n) {
 	float b_norm = b.norm();
 	float angle = std::atan2(a.x() * b.y() - a.y() * b.x(), a.x() * b.x() + a.y() * b.y()); // atan2(det, dot)
 	float c;
-
 	if (-fPI_6 <= angle && angle <= fPI_6)
 		c = 2;
 	else if ((fPI_6 < angle && angle <= f2_PI_6) || (-f2_PI_6 <= angle && angle < -fPI_6))
@@ -252,7 +288,6 @@ float CustomLayout::adaptativeCool(const tlp::node &n) {
 		c = 2.0f / 3;
 	else
 		c = 1.0f / 3; 
-
 	float res = c * b_norm;
 	if (a_norm > res && res > 0)
 		return res;
@@ -276,12 +311,10 @@ float CustomLayout::computeRadius(unsigned int start, unsigned int end, tlp::Coo
 		double nodeRad = sqrt(curSize.getW() * curSize.getW() + curSize.getH() * curSize.getH());
 		tlp::Coord radDir(curCoord - center);
 		double curRad = nodeRad + radDir.norm();
-
 		if (radDir.norm() < 1e-6) {
 			curRad = nodeRad;
 			radDir = tlp::Coord(1.0, 0.0, 0.0);
 		}
-
 		if (curRad > maxRad)
 			maxRad = curRad;
 	}
@@ -323,23 +356,10 @@ void CustomLayout::buildKdTreeAux(KNode *node, unsigned int level, bool refresh)
 		node->leftChild = new KNode(node->start, medianIndex, leftRadius, leftCenter);
 		node->rightChild = new KNode(medianIndex, node->end, rightRadius, rightCenter);
 	}
-	
-	// tlp::ColorProperty *color = graph->getProperty<tlp::ColorProperty>("viewColor");
-	// tlp::node n;
-	// tlp::Color c(std::rand() % 255, std::rand() % 255, std::rand() % 255);
-	// for (unsigned int i = node->leftChild->start; i < node->leftChild->end; ++i) {
-	// 	color->setNodeValue(m_nodesCopy[i], c);
-	// }	
-	// c = tlp::Color(std::rand() % 255, std::rand() % 255, std::rand() % 255);
-	// for (unsigned int i = node->rightChild->start; i < node->rightChild->end; ++i) {
-	// 	color->setNodeValue(m_nodesCopy[i], c);
-	// }
-
 	if (m_multipoleExpansion) {
 		computeCoef(node->leftChild);
 		computeCoef(node->rightChild);
 	}
-
 	if (std::min(medianIndex - node->start, node->end - medianIndex) <= m_maxPartitionSize) return;
 	#pragma omp task
 	buildKdTreeAux(node->leftChild, level + 1, refresh);
@@ -371,61 +391,14 @@ KNode* CustomLayout::buildKdTree(bool refresh, KNode *root=nullptr) {
 	return root;
 }
 
-void CustomLayout::computeReplForces(const tlp::node &n, KNode *kdTree, bool computeEnergy) {
-	if (kdTree == nullptr) {
-		pluginProgress->setError("nullptr kdTree in CustomLayout::computeReplForces");
-		return;
-	}
-
-	// leaf node case -> compute the exact repulsive forces between n and the vertices contained in the leaf node
-	if (kdTree->leftChild == nullptr && kdTree->rightChild == nullptr) {
-		for (unsigned int i = kdTree->start; i < kdTree->end; ++i) {
-			const tlp::node &v = m_nodesCopy[i];
-			if (n != v) {
-				tlp::Coord dist = m_pos[n] - m_pos[v];
-				dist *= computeReplForce(dist);
-				m_disp[n] += dist;
-			}
-		}
-		return;
-	}
-
-	tlp::Coord dist = m_pos[n] - kdTree->center;
-	float distNorm = dist.norm();
-	
-	// internal node case and n is outside the partition -> compute the approximate repulsive force between n and the vertices contained by the kd-tree node 
-	if (distNorm > kdTree->radius) {
-		if (!m_multipoleExpansion) {
-			dist *= (kdTree->end - kdTree->start) * computeReplForce(dist);
-			m_disp[n] += dist;
-		} else {
-			std::complex<float> zMinusz0 = std::complex<float>(dist.x(), dist.y());
-			std::complex<float> potential = kdTree->a0 / zMinusz0; 
-			for (unsigned int k = 1; k < m_pTerm+1; ++k) {
-				zMinusz0 *= zMinusz0; // next power
-				potential += (float)k * kdTree->coefs[k-1] / zMinusz0;
-			}
-			m_disp[n] += tlp::Coord(potential.real(), -potential.imag())*100.0f;
-		}
-	}
-	// internal node case and n is inside the partition -> continue through the kd-tree 
-	else { 
-		computeReplForces(n, kdTree->leftChild, computeEnergy);
-		computeReplForces(n, kdTree->rightChild, computeEnergy);
-	}
-}
-
 void CustomLayout::computeCoef(KNode *node) {
 	std::complex<float> ziMinusz0Overk;
 	std::vector<std::complex<float>> coefs;
 	unsigned int nbCoefs = m_pTerm;
-
 	coefs.reserve(nbCoefs);
 	for (unsigned int i = 0; i < nbCoefs; ++i)
 		coefs.push_back(std::complex<float>(0, 0));
-
 	node->a0 = node->end - node->start;
-	
 	for (unsigned int i = node->start; i < node->end; ++i) {
 		tlp::node v = m_nodesCopy[i];
 		tlp::Coord dist = m_pos[v] - node->center;
@@ -436,4 +409,47 @@ void CustomLayout::computeCoef(KNode *node) {
 		}
 	}
 	node->coefs = coefs;
+}
+
+void CustomLayout::computeReplForces(const tlp::node &n, KNode *kdTree, bool computeEnergy) {
+	if (kdTree == nullptr) {
+		pluginProgress->setError("nullptr kdTree in CustomLayout::computeReplForces");
+		return;
+	}
+	tlp::Coord dist = m_pos[n] - kdTree->center;
+	float distNorm = dist.norm();
+	if (kdTree->leftChild == nullptr && kdTree->rightChild == nullptr) {
+		for (unsigned int i = kdTree->start; i < kdTree->end; ++i) {
+			const tlp::node &v = m_nodesCopy[i];
+			if (n != v) {
+				tlp::Coord dist = m_pos[n] - m_pos[v];
+				dist *= computeReplForce(dist);
+				m_disp[n] += dist;
+				if (computeEnergy)
+					m_energy[n] += computeReplForceIntgr(dist);
+			}
+		}
+		++count;
+		return;
+	}
+	if (distNorm > kdTree->radius) {	
+		if (!m_multipoleExpansion) {
+			dist *= (kdTree->end - kdTree->start) * computeReplForce(dist);
+			m_disp[n] += dist;
+		} else {
+			std::complex<float> zMinusz0 = std::complex<float>(dist.x(), dist.y());
+			std::complex<float> potential = kdTree->a0 / zMinusz0; 
+			for (unsigned int k = 1; k < m_pTerm+1; ++k) {
+				zMinusz0 *= zMinusz0; // next power
+				potential += (float)k * kdTree->coefs[k-1] / zMinusz0;
+			}
+			m_disp[n] += tlp::Coord(potential.real(), -potential.imag()) * MULTIPOLE_EXPANSION_FACTOR;
+		}
+		if (computeEnergy) 
+			m_energy[n] += computeReplForceIntgr(dist);
+		++count;
+	}	else { 
+		computeReplForces(n, kdTree->leftChild, computeEnergy);
+		computeReplForces(n, kdTree->rightChild, computeEnergy);
+	}
 }
