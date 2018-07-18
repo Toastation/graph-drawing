@@ -37,12 +37,6 @@ const float f2_PI_6 = 2.0f * fPI_6;
 const float f3_PI_6 = 3.0f * fPI_6;
 const float f4_PI_6 = 4.0f * fPI_6;
 
-std::chrono::duration<double> dur1;
-std::chrono::duration<double> dur2;
-std::chrono::duration<double> dur3;
-std::chrono::duration<double> dur4;
-unsigned int count = 0;
-
 PLUGIN(CustomLayout)
 
 CustomLayout::CustomLayout(const tlp::PluginContext *context) 
@@ -101,10 +95,9 @@ bool CustomLayout::run() {
 
 	while (!quit) {
 		auto start = std::chrono::high_resolution_clock::now();
-		if (it <= 4 || it % 20 == 0) 
+		if (it <= 4 || it % 20 == 0)
 			buildKdTree(true, kdTree);
 		auto end = std::chrono::high_resolution_clock::now();
-		dur1 += end - start;
 
 		refinement = m_refinement && it % m_refinementFreq == 0;
 
@@ -115,10 +108,8 @@ bool CustomLayout::run() {
 			if (!m_condition || m_canMove->getNodeValue(m_nodesCopy[i]))
 				computeReplForces(m_nodesCopy[i], kdTree, refinement);
 		}
-		std::cout << "count: " << count << std::endl;
-		count = 0;
+		// std::cout << "count: " << count << std::endl;
 		end = std::chrono::high_resolution_clock::now();
-		dur2 += end - start;
 
 		//compute attractive forces TODO: find a way to parallelize
 		start = std::chrono::high_resolution_clock::now();
@@ -139,7 +130,6 @@ bool CustomLayout::run() {
 			}
 		}
 		end = std::chrono::high_resolution_clock::now();
-		dur3 += end - start;
 
 		// update nodes position
 		start = std::chrono::high_resolution_clock::now();
@@ -163,7 +153,6 @@ bool CustomLayout::run() {
 			m_disp[n] = tlp::Coord(0);
 		}
 		end = std::chrono::high_resolution_clock::now();
-		dur4 += end - start;
 
 		if (m_stoppingCriterion && averageDisp <= m_threshold)
 			quit = true;
@@ -182,12 +171,6 @@ bool CustomLayout::run() {
 	}
 
 	deleteTree(kdTree);
-
-	std::cout << "dir 1: " << dur1.count() << std::endl;
-	std::cout << "dir 2: " << dur2.count() << std::endl;
-	std::cout << "dir 3: " << dur3.count() << std::endl;
-	std::cout << "dir 4: " << dur4.count() << std::endl;
-
 
 	// update result property
 	#pragma omp parallel for
@@ -419,17 +402,18 @@ void CustomLayout::computeReplForces(const tlp::node &n, KNode *kdTree, bool com
 	tlp::Coord dist = m_pos[n] - kdTree->center;
 	float distNorm = dist.norm();
 	if (kdTree->leftChild == nullptr && kdTree->rightChild == nullptr) {
-		for (unsigned int i = kdTree->start; i < kdTree->end; ++i) {
-			const tlp::node &v = m_nodesCopy[i];
-			if (n != v) {
-				tlp::Coord dist = m_pos[n] - m_pos[v];
-				dist *= computeReplForce(dist);
-				m_disp[n] += dist;
-				if (computeEnergy)
-					m_energy[n] += computeReplForceIntgr(dist);
+		if (distNorm <= kdTree->radius) {
+			for (unsigned int i = kdTree->start; i < kdTree->end; ++i) {
+				const tlp::node &v = m_nodesCopy[i];
+				if (n != v) {
+					tlp::Coord dist = m_pos[n] - m_pos[v];
+					dist *= computeReplForce(dist);
+					m_disp[n] += dist;
+					if (computeEnergy)
+						m_energy[n] += computeReplForceIntgr(dist);
+				}
 			}
 		}
-		++count;
 		return;
 	}
 	if (distNorm > kdTree->radius) {	
@@ -447,7 +431,6 @@ void CustomLayout::computeReplForces(const tlp::node &n, KNode *kdTree, bool com
 		}
 		if (computeEnergy) 
 			m_energy[n] += computeReplForceIntgr(dist);
-		++count;
 	}	else { 
 		computeReplForces(n, kdTree->leftChild, computeEnergy);
 		computeReplForces(n, kdTree->rightChild, computeEnergy);
