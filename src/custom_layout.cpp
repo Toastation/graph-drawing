@@ -94,25 +94,19 @@ bool CustomLayout::run() {
 	auto start = std::chrono::high_resolution_clock::now();
 
 	while (!quit) {
-		auto start = std::chrono::high_resolution_clock::now();
 		if (it <= 4 || it % 20 == 0)
 			buildKdTree(true, kdTree);
-		auto end = std::chrono::high_resolution_clock::now();
 
 		refinement = m_refinement && it % m_refinementFreq == 0;
 
 		// compute repulsive forces
-		start = std::chrono::high_resolution_clock::now();
-		#pragma omp parallel for reduction(+:count)
+		#pragma omp parallel for
 		for (unsigned int i = 0; i < m_nodesCopy.size(); ++i) {
 			if (!m_condition || m_canMove->getNodeValue(m_nodesCopy[i]))
 				computeReplForces(m_nodesCopy[i], kdTree, refinement);
 		}
-		// std::cout << "count: " << count << std::endl;
-		end = std::chrono::high_resolution_clock::now();
 
 		//compute attractive forces TODO: find a way to parallelize
-		start = std::chrono::high_resolution_clock::now();
 		for (auto e : graph->edges()) { 
 			const tlp::node &u = graph->source(e);
 			const tlp::node &v = graph->target(e);
@@ -129,10 +123,8 @@ bool CustomLayout::run() {
 					m_energy[v] += computeAttrForceIntgr(dist);				
 			}
 		}
-		end = std::chrono::high_resolution_clock::now();
 
 		// update nodes position
-		start = std::chrono::high_resolution_clock::now();
 		#pragma omp parallel for
 		for (unsigned int i = 0; i < m_nodesCopy.size(); i++) { // update positions
 			const tlp::node &n = m_nodesCopy[i];
@@ -152,7 +144,6 @@ bool CustomLayout::run() {
 			m_dispPrev[n] = m_disp[n];
 			m_disp[n] = tlp::Coord(0);
 		}
-		end = std::chrono::high_resolution_clock::now();
 
 		if (m_stoppingCriterion && averageDisp <= m_threshold)
 			quit = true;
