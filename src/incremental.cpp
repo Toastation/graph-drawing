@@ -132,7 +132,7 @@ bool Incremental::run() {
             ds.set("block nodes", true);
             ds.set("movable nodes", subgraphs[i]->getLocalProperty<tlp::BooleanProperty>("canMove"));
         }
-        // ds.set("pack connected components", i % 20 == 0); 
+        ds.set("pack connected components", i % 20 == 0); 
         subgraphs[i]->applyPropertyAlgorithm("Custom Layout", currentPos, errorMessage, nullptr, &ds);
         previousPos = currentPos;
         pluginProgress->progress(i, subgraphs.size());

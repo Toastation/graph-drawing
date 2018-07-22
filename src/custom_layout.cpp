@@ -189,7 +189,7 @@ unsigned int CustomLayout::mainLoop(unsigned int maxIterations) {
 	float averageEnergy = 0;
 
 	while (!quit) {
-		if (it <= 4 || it % 20 == 0)
+		if (it <= 4 || it % 10 == 0)
 			buildKdTree(true, kdTree);
 
 		// no need to refine if there are no blocked nodes...
@@ -207,7 +207,6 @@ unsigned int CustomLayout::mainLoop(unsigned int maxIterations) {
 			const tlp::node &u = graph->source(e);
 			const tlp::node &v = graph->target(e);
 			tlp::Coord dist = m_pos[u] - m_pos[v];
-			dist *= computeAttrForce(dist);
 			if (!m_condition || m_canMove->getNodeValue(u)) {
 		 		m_disp[u] -= dist;
 				if (refinement)
@@ -415,16 +414,14 @@ void CustomLayout::computeReplForces(const tlp::node &n, KNode *kdTree, bool com
 	tlp::Coord dist = m_pos[n] - kdTree->center;
 	float distNorm = dist.norm();
 	if (kdTree->leftChild == nullptr && kdTree->rightChild == nullptr) {
-		if (distNorm <= kdTree->radius) {
-			for (unsigned int i = kdTree->start; i < kdTree->end; ++i) {
-				const tlp::node &v = m_nodesCopy[i];
-				if (n != v) {
-					tlp::Coord dist = m_pos[n] - m_pos[v];
-					dist *= computeReplForce(dist);
-					m_disp[n] += dist;
-					if (computeEnergy)
-						m_energy[n] += computeReplForceIntgr(dist);
-				}
+		for (unsigned int i = kdTree->start; i < kdTree->end; ++i) {
+			const tlp::node &v = m_nodesCopy[i];
+			if (n != v) {
+				tlp::Coord dist = m_pos[n] - m_pos[v];
+				dist *= computeReplForce(dist);
+				m_disp[n] += dist;
+				if (computeEnergy)
+					m_energy[n] += computeReplForceIntgr(dist);
 			}
 		}
 		return;
