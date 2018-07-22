@@ -1,1 +1,1 @@
-sudo g++ -Wall custom_layout.cpp -std=c++17 -pedantic -g -fopenmp -DNDEBUG `tulip-config --libs --cxxflags --plugincxxflags --pluginldflags` -o  `tulip-config --pluginpath`libCustomLayout-`tulip-config --version`.`tulip-config --pluginextension`
+sudo g++ -Wall custom_layout.cpp -std=c++17 -Wall -pedantic -g -fopenmp -DNDEBUG `tulip-config --libs --cxxflags --plugincxxflags --pluginldflags` -o  `tulip-config --pluginpath`libCustomLayout-`tulip-config --version`.`tulip-config --pluginextension`

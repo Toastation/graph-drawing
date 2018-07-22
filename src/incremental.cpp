@@ -44,17 +44,62 @@ bool isInIterator(tlp::Iterator<T> *it, T elem) {
     return false;
 } 
 
-FMMMIncremental::FMMMIncremental(const tlp::PluginContext* context) 
+Incremental::Incremental(const tlp::PluginContext* context) 
     : tlp::Algorithm(context), m_idealEdgeLength(DEFAULT_IDEAL_EDGE_LENGTH), m_newColor(DEFAULT_NEW_COLOR), m_adjToDeletedColor(DEFAULT_ADJ_TO_DELETED_COLOR) {
+    addInParameter<bool>("adaptive cooling", "If true, the algo uses a local cooling function based on the angle between each node's movement. Else it uses a global linear cooling function.", "", false);
+	addInParameter<bool>("stopping criterion", "If true, stops the algo before the maximum number of iterations if the graph has converged. See \"convergence threshold\"", "", false);
+	addInParameter<bool>("multipole expansion", "If true, apply a 4-term multipole expansion for more accurate layout. May affect performances.", "", false);
+	addInParameter<bool>("refinement", "", "", false);	
+	addInParameter<unsigned int>("max iterations", "The maximum number of iterations of the algorithm.", "300", false);
+	addInParameter<unsigned int>("max displacement", "The maximum length a node can move. Very high values or very low values may result in chaotic behavior.", "200", false);
+	addInParameter<unsigned int>("refinement iterations", "", "20", false);
+	addInParameter<unsigned int>("refinement frequency", "", "30", false);	
+	addInParameter<float>("ideal edge length", "The ideal edge length.", "10", false);
+	addInParameter<float>("spring force strength", "Factor of the spring force", "1", false);
+	addInParameter<float>("repulsive force strength", "Factor of the repulsive force", "100", false);
+	addInParameter<float>("convergence threshold", "If the average node energy is lower than this threshold, the graph is considered to have converged and the algorithm stops. Only taken into consideration if \"stopping criterion\" is true", "0.1", false);
     addDependency("Custom Layout", "1.0");
 }
 
-bool FMMMIncremental::check(std::string &errorMessage) {
+bool Incremental::check(std::string &errorMessage) {
     std::srand(std::time(NULL));
     return true;
 }
 
-bool FMMMIncremental::run() {
+bool Incremental::run() {
+    tlp::DataSet ds;
+	bool btemp = false;
+	int itemp = 0;
+	float ftemp = 0.0f;
+	if (dataSet != nullptr) {
+		if (dataSet->get("max iterations", itemp))
+			ds.set("max iterations", itemp);
+		if (dataSet->get("refinement iterations", itemp))
+			ds.set("refinement iterations", itemp);
+		if (dataSet->get("refinement frequency", itemp))
+			ds.set("refinement frequency", itemp);
+		if (dataSet->get("max displacement", ftemp))
+			ds.set("max displacement", ftemp);
+		if (dataSet->get("ideal edge length", ftemp))
+			ds.set("ideal edge length", ftemp);
+		if (dataSet->get("spring force strength", ftemp))
+			ds.set("spring force strength", ftemp);
+		if (dataSet->get("repulsive force strength", ftemp))
+			ds.set("repulsive force strength", ftemp);
+		if (dataSet->get("convergence threshold", ftemp))
+			ds.set("convergence threshold", ftemp);
+		if (dataSet->get("high energy threshold", ftemp))
+			ds.set("high energy threshold", ftemp);
+		if (dataSet->get("adaptive cooling", btemp))
+			ds.set("adaptive cooling", btemp);
+		if (dataSet->get("stopping criterion", btemp))
+			ds.set("stopping criterion", btemp);
+		if (dataSet->get("multipole expansion", btemp))
+			ds.set("multipole expansion", btemp);
+		if (dataSet->get("refinement", btemp))
+			ds.set("refinement", btemp);
+	}
+
     if (graph->numberOfSubGraphs() == 0)
         pluginProgress->setError("There is no timeline!");
 
@@ -64,13 +109,15 @@ bool FMMMIncremental::run() {
     forEach (g, graph->getSubGraphs()) {
         subgraphs.push_back(g);
     }
-    // we should check the order of the subgraphs, right now it's the responsability of the user
+
+    // TODO: we should check the order of the subgraphs, right now it's the responsability of the user
 
     tlp::ColorProperty *globalColors = graph->getProperty<tlp::ColorProperty>("viewColor");     
     tlp::LayoutProperty *previousPos = graph->getProperty<tlp::LayoutProperty>("viewLayout");
     tlp::LayoutProperty *currentPos;
     tlp::ColorProperty *currentColors;
     std::string message;
+
     for (unsigned int i = 0; i < subgraphs.size(); ++i) {
         message = "Computing timeline... " + i;
         message += "/ " + subgraphs.size();
@@ -79,13 +126,13 @@ bool FMMMIncremental::run() {
         currentColors = subgraphs[i]->getLocalProperty<tlp::ColorProperty>("viewColor");     
         currentPos->copy(previousPos);
         currentColors->copy(globalColors);
-        tlp::DataSet ds;
         if (i > 0) { // no need to block nodes and compute differences for the first graph of the timeline
             computeDifference(subgraphs[i-1], subgraphs[i]);
             positionNodes(subgraphs[i]);
             ds.set("block nodes", true);
             ds.set("movable nodes", subgraphs[i]->getLocalProperty<tlp::BooleanProperty>("canMove"));
         }
+        // ds.set("pack connected components", i % 20 == 0); 
         subgraphs[i]->applyPropertyAlgorithm("Custom Layout", currentPos, errorMessage, nullptr, &ds);
         previousPos = currentPos;
         pluginProgress->progress(i, subgraphs.size());
@@ -93,7 +140,7 @@ bool FMMMIncremental::run() {
     return true;
 }
 
-bool FMMMIncremental::computeDifference(tlp::Graph *oldGraph, tlp::Graph *newGraph) {
+bool Incremental::computeDifference(tlp::Graph *oldGraph, tlp::Graph *newGraph) {
     tlp::BooleanProperty *isNewNode = newGraph->getLocalProperty<tlp::BooleanProperty>("isNewNode");
     tlp::BooleanProperty *isNewEdge = newGraph->getLocalProperty<tlp::BooleanProperty>("isNewEdge");
     tlp::BooleanProperty *adjacentToDeletedEdge = newGraph->getLocalProperty<tlp::BooleanProperty>("adjDeletedEdge");
@@ -101,8 +148,12 @@ bool FMMMIncremental::computeDifference(tlp::Graph *oldGraph, tlp::Graph *newGra
     isNewNode->setAllNodeValue(false);
     isNewEdge->setAllNodeValue(false);
     adjacentToDeletedEdge->setAllNodeValue(false);
-
+    tlp::node source;
+    tlp::node target;
     tlp::node n;
+    tlp::edge e;
+
+    // mark new nodes
     forEach(n, newGraph->getNodes()) {
         if (!isInIterator<tlp::node>(oldGraph->getNodes(), n)) {
             isNewNode->setNodeValue(n, true);
@@ -110,7 +161,7 @@ bool FMMMIncremental::computeDifference(tlp::Graph *oldGraph, tlp::Graph *newGra
         }
     }
 
-    tlp::edge e;
+    // mark new edges
     forEach(e, newGraph->getEdges()) {
         if (!isInIterator<tlp::edge>(oldGraph->getEdges(), e)) {
             isNewEdge->setEdgeValue(e, true);
@@ -118,8 +169,7 @@ bool FMMMIncremental::computeDifference(tlp::Graph *oldGraph, tlp::Graph *newGra
         }
     }
 
-    tlp::node source;
-    tlp::node target;
+    // mark nodes who lost a neighbor
     forEach(e, oldGraph->getEdges()) {
         if (!isInIterator<tlp::edge>(newGraph->getEdges(), e)) {
             isNewEdge->setEdgeValue(e, true);
@@ -138,7 +188,7 @@ bool FMMMIncremental::computeDifference(tlp::Graph *oldGraph, tlp::Graph *newGra
     return true;    
 }
 
-bool FMMMIncremental::positionNodes(tlp::Graph *g) {
+bool Incremental::positionNodes(tlp::Graph *g) {
     tlp::BooleanProperty *isNewNode = g->getLocalProperty<tlp::BooleanProperty>("isNewNode");
     tlp::BooleanProperty *isNewEdge = g->getLocalProperty<tlp::BooleanProperty>("isNewEdge");    
     tlp::BooleanProperty *adjacentToDeletedEdge = g->getLocalProperty<tlp::BooleanProperty>("adjDeletedEdge");
@@ -150,11 +200,13 @@ bool FMMMIncremental::positionNodes(tlp::Graph *g) {
     std::vector<tlp::node> newNodes;
     canMove->setAllNodeValue(false);
     positioned->setAllNodeValue(false);
+    tlp::edge e;
     tlp::node n;
     tlp::node n2;
     tlp::BoundingBox bb = tlp::computeBoundingBox(g, pos, size, rot);
     std::srand(std::time(nullptr));
 
+    // mark already positioned nodes, and list the new nodes
     forEach(n, g->getNodes()) {
         std::cout << pos->getNodeValue(n) << std::endl;
         if (adjacentToDeletedEdge->getNodeValue(n))
@@ -165,7 +217,7 @@ bool FMMMIncremental::positionNodes(tlp::Graph *g) {
             newNodes.push_back(n);
     }
 
-    tlp::edge e;
+    // allow nodes connected to a new edge to move
     forEach(e, g->getEdges()) {
         if (isNewEdge->getEdgeValue(e)) {
             canMove->setNodeValue(g->source(e), true);
@@ -173,6 +225,7 @@ bool FMMMIncremental::positionNodes(tlp::Graph *g) {
         }
     }
 
+    // create a subgraph from the new nodes and store the connected components of this subgraph
     tlp::Graph *newNodeSg = g->inducedSubGraph(newNodes);
     std::vector<std::vector<tlp::node>> components;
     tlp::ConnectedTest::computeConnectedComponents(newNodeSg, components);
@@ -200,14 +253,12 @@ bool FMMMIncremental::positionNodes(tlp::Graph *g) {
 
         forEach (n, ccSg->bfs(maxPositionedNeighborsNode)) {
             canMove->setNodeValue(n, true);
-            
             std::vector<tlp::node> positionedNeighbors;
             forEach(n2, ccSg->getInOutNodes(n)) {
                 if (positioned->getNodeValue(n2))
                     positionedNeighbors.push_back(n2);
             }
             unsigned int nbPositionedNeighbors = positionedNeighbors.size();
-
             if (nbPositionedNeighbors == 0) {
                 pos->setNodeValue(n, tlp::Vec3f(std::rand() % int(bb.width()), std::rand() % int(bb.height())));
             } else if (nbPositionedNeighbors == 1) {
@@ -232,5 +283,5 @@ bool FMMMIncremental::positionNodes(tlp::Graph *g) {
 
 #ifndef FMMMINCREMENTAL_REGISTERED
 #define FMMMINCREMENTAL_REGISTERED
-PLUGIN(FMMMIncremental)
+PLUGIN(Incremental)
 #endif

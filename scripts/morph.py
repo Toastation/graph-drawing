@@ -9,8 +9,8 @@ def main(graph):
     pos = graph.getLayoutProperty("viewLayout")
     previous_pos = tlp.LayoutProperty(graph)
     color = graph.getColorProperty("viewColor")
-    i = 0
-    steps = 1000
+    it = 0
+    steps = 100
     for g in graph.getSubGraphs():
         print(g)
         sg_pos = g.getLocalLayoutProperty("viewLayout")
@@ -29,7 +29,7 @@ def main(graph):
             color[e] = tlp.Color(0, 0, 0, 0) 
           else:
             color[e] = sg_color[e]
-        if i > 0:
+        if it > 0:
             for n in is_new_node.getNodesEqualTo(True):
                 pos[n] = sg_pos[n]
                 color[n].setA(0)
@@ -51,8 +51,7 @@ def main(graph):
                         color[e] = tlp.Color(c.getR(), c.getG(), c.getB(), int(alpha))
                 updateVisualization(True)
         updateVisualization(True) 
-        time.sleep(0.5)
         #pauseScript()             
         previous_pos.copy(sg_pos)
-        i += 1
+        it += 1
     

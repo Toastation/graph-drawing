@@ -7,27 +7,31 @@
 #include <tulip/TulipPluginHeaders.h>
 #include <tulip/BooleanProperty.h>
 
+/**
+ * @brief Node of a kd-tree, stores the necessary information to approximate the repulsive forces
+ */
 struct KNode {
-	unsigned int start;
-	unsigned int end;
-	float radius;
-	tlp::Coord center;
-	KNode *leftChild;
-	KNode *rightChild;
-	float a0;
-	std::vector<std::complex<float>> coefs;
+	unsigned int start; // First index of the sub-list of vertices of CustomLayout::m_nodesCopy
+	unsigned int end; // Last index of the sub-list of vertices of CustomLayout::m_nodesCopy
+	float radius; // Length between the center of gravity of the vertices and the farthest vertex
+	tlp::Coord center; // Center of gravity of the vertices
+	float a0; // First coefficient of the multipole expansion
+	std::vector<std::complex<float>> coefs; // Coefficents of the p-term sum. 
+	KNode *leftChild; // Pointer to the left child
+	KNode *rightChild; // Pointer to the right child
 
 	KNode(unsigned int _start=0, unsigned int _end=0, float _radius=0, tlp::Coord _center=tlp::Coord(0)) 
 		: start(_start), end(_end), radius(_radius), center(_center) {
+		a0 = 0;
 		leftChild = nullptr;
 		rightChild = nullptr;
-		a0 = 0;
 	}
 
 	~KNode() {
 		
 	}
 
+	//*********** DEBUG
 	bool isLeaf() {
 		return leftChild == nullptr && rightChild == nullptr;
 	}
@@ -73,6 +77,7 @@ struct KNode {
 				rightChild->printLeaf();
 		}
 	}
+	//*********** END DEBUG
 };
 
 void deleteTree(KNode *tree) {
@@ -103,6 +108,7 @@ private:
 	bool m_adaptiveCooling; // Whether or not to use the local adaptive cooling strategy
 	bool m_stoppingCriterion; // Whether or not to stop the algo earlier if convergence has been detected
 	bool m_refinement; // Whether or not to use the refinement strategy.
+	bool m_packCC; // Whether or not to pack the connected components after the drawing
 	float m_L; // Ideal edge length
 	float m_Kr; // Repulsive force constant
 	float m_Ks; // Spring force constant
@@ -112,12 +118,14 @@ private:
 	float m_temp; // Global temperature of the graph
 	float m_threshold; // The convergence threshold
 	float m_maxDisp; // Maximum displament allowed for nodes.
+	float m_highEnergyThreshold;
 	unsigned int m_iterations; // Number of iterations
 	unsigned int m_refinementIterations; // Number of iterations of the refinement process
 	unsigned int m_refinementFreq; // Number of iterations in between refinement steps
 	unsigned int m_maxPartitionSize; // Maximum number of nodes of the smallest partition of the graph (via KD-tree)
 	unsigned int m_pTerm; // Number of term to compute in the p-term multipole expansion
 	tlp::BooleanProperty *m_canMove; // Which nodes are able to move during the algorithm
+	tlp::BooleanProperty *m_highEnergy; // True if a node has a high energy
 	tlp::SizeProperty *m_size; // viewSize
 	tlp::DoubleProperty *m_rot;	// viewRotation
 	std::vector<tlp::node> m_nodesCopy; // Copy of the graph's nodes, /!\ the order is NOT fixed
@@ -126,11 +134,18 @@ private:
 	TLP_HASH_MAP<tlp::node, tlp::Coord> m_pos; // Current position of each node
 	TLP_HASH_MAP<tlp::node, float> m_energy; // Current energy of each node
 
+
 	/**
 	 * @brief Prepares the algo (initialises hashmaps, etc) 
-	 * @return Returns whether or not the initalisation has been successful
+	 * @return Returns whether or not the initalisation was successful
 	 */
 	bool init();
+
+	/**
+	 * @brief Main loop of the simulation, computes the drawing and stops after a certain number of iterations or until convergence 
+	 * @return The number of iterations done 
+	 */
+	unsigned int mainLoop(unsigned int maxIterations);
 
 	/**
 	 * @brief Computes local temperature for each node 
@@ -188,12 +203,10 @@ private:
 	void computeReplForces(const tlp::node &n, KNode *kdTree, bool computeEnergy);
 
 	/**
-	 * @brief Computes the attratives forces for all edges
-	 * @param computeEnergy If true, computes the node's energy (for the refinement step)
+	 * @brief Refine the drawing : detect high energy nodes and run a simulation allowing only them to move. 
+	 * @param averageEnergy 
 	 */
-	void computeAttrForces(bool computeEnergy);
-
-	void refinement();
+	void computeRefinement(double averageEnergy);
 
 	/**
 	 * @brief Computes the repulsive force between two nodes
@@ -221,10 +234,20 @@ private:
 		return m_Ks * distNorm * std::log(distNorm / m_L);
 	}
 
+	/**
+	 * @brief Computes the integral of the repulsive force formula (i.e the energy associated with the force)
+	 * @param dist The distance between nodes
+	 * @return float The integral of the repulsive force formula
+	 */
 	float computeReplForceIntgr(const tlp::Vec3f &dist) {
 		return -m_Kr / dist.norm();
 	}
 
+	/**
+	 * @brief Computes the integral of the attractive force formula (i.e the energy associated with the force)
+	 * @param dist The distance between nodes
+	 * @return float The integral of the attractive force formula
+	 */
 	float computeAttrForceIntgr(const tlp::Vec3f &dist) {
 		float distNorm = dist.norm();
 		return (m_Ks / 9.0f) * (distNorm * distNorm * distNorm * (std::log(distNorm / m_L) - 1) + (m_L * m_L * m_L));

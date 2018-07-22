@@ -25,9 +25,10 @@ const float DEFAULT_INIT_TEMP_FACTOR = 0.2f;
 const float DEFAULT_COOLING_FACTOR = 0.95f;
 const float DEFAULT_THRESHOLD = 0.1f;
 const float DEFAULT_MAX_DISP = 200.0f;
+const float DEFAULT_HIGH_ENERGY_THRESHOlD = 1.0f;
 const float MULTIPOLE_EXPANSION_FACTOR = 100.0f;
 const unsigned int DEFAULT_REFINEMENT_ITERATIONS = 20;
-const unsigned int DEFAULT_REFINEMENT_FREQ = 10;
+const unsigned int DEFAULT_REFINEMENT_FREQ = 30;
 const unsigned int DEFAULT_MAX_PARTITION_SIZE = 4;
 const unsigned int DEFAULT_PTERM = 4;
 const unsigned int DEFAUT_ITERATIONS = 300;
@@ -42,23 +43,25 @@ PLUGIN(CustomLayout)
 CustomLayout::CustomLayout(const tlp::PluginContext *context) 
 	: LayoutAlgorithm(context), m_L(DEFAULT_L), m_Kr(DEFAULT_KR), m_Ks(DEFAULT_KS),
 	  m_initTemp(DEFAULT_INIT_TEMP), m_initTempFactor(DEFAULT_INIT_TEMP_FACTOR), m_coolingFactor(DEFAULT_COOLING_FACTOR), m_threshold(DEFAULT_THRESHOLD), m_maxDisp(DEFAULT_MAX_DISP), 
-	  m_iterations(DEFAUT_ITERATIONS), m_refinementIterations(DEFAULT_REFINEMENT_ITERATIONS), m_refinementFreq(DEFAULT_REFINEMENT_FREQ),
+	  m_highEnergyThreshold(DEFAULT_HIGH_ENERGY_THRESHOlD), m_iterations(DEFAUT_ITERATIONS), m_refinementIterations(DEFAULT_REFINEMENT_ITERATIONS), m_refinementFreq(DEFAULT_REFINEMENT_FREQ),
 	  m_maxPartitionSize(DEFAULT_MAX_PARTITION_SIZE), m_pTerm(DEFAULT_PTERM) {
 	addInParameter<bool>("adaptive cooling", "If true, the algo uses a local cooling function based on the angle between each node's movement. Else it uses a global linear cooling function.", "", false);
 	addInParameter<bool>("stopping criterion", "If true, stops the algo before the maximum number of iterations if the graph has converged. See \"convergence threshold\"", "", false);
 	addInParameter<bool>("multipole expansion", "If true, apply a 4-term multipole expansion for more accurate layout. May affect performances.", "", false);
 	addInParameter<bool>("block nodes", "If true, only nodes in the set \"movable nodes\" will move.", "", false);
 	addInParameter<bool>("refinement", "", "", false);	
+	addInParameter<bool>("pack connected components", "", "true", false);	
 	addInParameter<unsigned int>("max iterations", "The maximum number of iterations of the algorithm.", "300", false);
 	addInParameter<unsigned int>("max displacement", "The maximum length a node can move. Very high values or very low values may result in chaotic behavior.", "200", false);
 	addInParameter<unsigned int>("refinement iterations", "", "20", false);
-	addInParameter<unsigned int>("refinement frequency", "", "10", false);	
+	addInParameter<unsigned int>("refinement frequency", "", "30", false);	
 	addInParameter<float>("ideal edge length", "The ideal edge length.", "10", false);
 	addInParameter<float>("spring force strength", "Factor of the spring force", "1", false);
 	addInParameter<float>("repulsive force strength", "Factor of the repulsive force", "100", false);
 	addInParameter<float>("convergence threshold", "If the average node energy is lower than this threshold, the graph is considered to have converged and the algorithm stops. Only taken into consideration if \"stopping criterion\" is true", "0.1", false);
+	addInParameter<float>("high energy threshold", "Threshold above which a node is consired to have a high energy", "1.0", false);	
 	addInParameter<tlp::BooleanProperty>("movable nodes", "Set of nodes allowed to move. Only taken into account if \"blocked nodes\" is true", "", false);
-	addDependency("Connected Component Packing", "1.0");
+	addDependency("Connected Component Packing (Polyomino)", "1.0");
 	m_cstTemp = false;
 	m_cstInitTemp = false;
 	m_condition = false;
@@ -81,23 +84,116 @@ bool CustomLayout::run() {
 	if (!init())
 		return false;
 
+	std::cout << "Initial temperature: " << m_temp << std::endl;
+	// std::string message = "Initial temperature: ";
+	// message += std::to_string(m_temp);
+	// pluginProgress->setComment(message);
+	auto start = std::chrono::high_resolution_clock::now();
+
+	unsigned int it = mainLoop(m_iterations);
+	
+	// update result property
+	#pragma omp parallel for
+	for (unsigned int i = 0; i < graph->numberOfNodes(); i++) { 
+		result->setNodeValue(m_nodesCopy[i], m_pos[m_nodesCopy[i]]);
+	}
+
+	if (m_packCC && !tlp::ConnectedTest::isConnected(graph)) { // pack connected components
+		std::string errorMessage;
+		tlp::DataSet ds;
+		ds.set("coordinates", result);
+		ds.set("node size", m_size);
+		ds.set("rotation", m_rot);
+		ds.set("margin", 50);
+		graph->applyPropertyAlgorithm("Connected Component Packing (Polyomino)", result, errorMessage, pluginProgress, &ds);
+	}
+
+	auto end = std::chrono::high_resolution_clock::now();
+	std::chrono::duration<double> elapsed = end - start;
+	std::cout << "elapsed: " << elapsed.count() << std::endl;
+	std::cout << "Iterations done: " << it  << std::endl;
+
+	return true;
+}
+
+bool CustomLayout::init() {
+	bool btemp = false;
+	int itemp = 0;
+	float ftemp = 0.0f;
+	tlp::BooleanProperty *temp;
+	if (dataSet != nullptr) {
+		if (dataSet->get("max iterations", itemp))
+			m_iterations = itemp;
+		if (dataSet->get("refinement iterations", itemp))
+			m_refinementIterations = itemp;
+		if (dataSet->get("refinement frequency", itemp))
+			m_refinementFreq = itemp;
+		if (dataSet->get("max displacement", ftemp))
+			m_maxDisp = itemp;
+		if (dataSet->get("ideal edge length", ftemp))
+			m_L = ftemp;
+		if (dataSet->get("spring force strength", ftemp))
+			m_Ks = ftemp;
+		if (dataSet->get("repulsive force strength", ftemp))
+			m_Kr = ftemp;
+		if (dataSet->get("convergence threshold", ftemp))
+			m_threshold = ftemp;
+		if (dataSet->get("high energy threshold", ftemp))
+			m_highEnergyThreshold = ftemp;
+		if (dataSet->get("adaptive cooling", btemp))
+			m_adaptiveCooling = btemp;
+		if (dataSet->get("stopping criterion", btemp))
+			m_stoppingCriterion = btemp;
+		if (dataSet->get("multipole expansion", btemp))
+			m_multipoleExpansion = btemp;
+		if (dataSet->get("block nodes", btemp))
+			m_condition = btemp;
+		if (dataSet->get("refinement", btemp))
+			m_refinement = btemp;
+		if (dataSet->get("movable nodes", temp))
+			m_canMove = temp;
+		if (dataSet->get("pack connected components", btemp))
+			m_packCC = btemp;
+		else if (m_condition) {
+			pluginProgress->setError("\"block nodes\" parameter is true but no BooleanProperty was given. Check parameter \"movable nodes\"");
+			return false;
+		}
+	}
+	
+	result->copy(graph->getProperty<tlp::LayoutProperty>("viewLayout"));
+	result->setAllEdgeValue(std::vector<tlp::Vec3f>(0));
+
+	m_size = graph->getLocalProperty<tlp::SizeProperty>("viewSize");
+	m_rot = graph->getLocalProperty<tlp::DoubleProperty>("viewRotation");
+	m_highEnergy = graph->getLocalProperty<tlp::BooleanProperty>("highEnergy");
+
+	tlp::BoundingBox bb = tlp::computeBoundingBox(graph, result, m_size, m_rot);
+	m_temp = m_cstInitTemp ? m_initTemp : std::max(std::min(bb.width(), bb.height()) * m_initTempFactor, 2 * m_L);
+
+	m_nodesCopy = graph->nodes();
+	for (auto n : m_nodesCopy) {
+		m_energy[n] = 0;
+		m_disp[n] = tlp::Coord(0, 0, 0);
+		m_dispPrev[n] = tlp::Coord(0, 0, 0);
+		m_pos[n] = result->getNodeValue(n);
+	}
+	return true;
+}
+
+unsigned int CustomLayout::mainLoop(unsigned int maxIterations) {
 	KNode *kdTree = buildKdTree(false, nullptr);
 	bool quit = false;
 	bool refinement = false;
 	unsigned int it = 1;
 	float averageDisp = 0;
-	
-	std::cout << "Initial temperature: " << m_temp << std::endl;
-	std::string message = "Initial temperature: ";
-	message += std::to_string(m_temp);
-	pluginProgress->setComment(message);
-	auto start = std::chrono::high_resolution_clock::now();
+	float averageEnergy = 0;
 
 	while (!quit) {
 		if (it <= 4 || it % 20 == 0)
 			buildKdTree(true, kdTree);
 
-		refinement = m_refinement && it % m_refinementFreq == 0;
+		// no need to refine if there are no blocked nodes...
+		refinement = m_condition && m_refinement && it > 0 && it % m_refinementFreq == 0;
 
 		// compute repulsive forces
 		#pragma omp parallel for
@@ -139,110 +235,36 @@ bool CustomLayout::run() {
 					m_disp[n] *= cooledNorm / dispNorm;
 				}				
 			}
+			if (refinement)
+				averageEnergy += m_energy[n];
 			averageDisp += cooledNorm;
 			m_pos[n] += m_disp[n];
 			m_dispPrev[n] = m_disp[n];
 			m_disp[n] = tlp::Coord(0);
 		}
 
-		if (m_stoppingCriterion && averageDisp <= m_threshold)
+		if (m_stoppingCriterion && averageDisp <= m_threshold) {
 			quit = true;
+
+		}
 		averageDisp = 0;
+
+		if (refinement || quit)
+			computeRefinement(averageEnergy);
 
 		if (!m_adaptiveCooling && !m_cstTemp)
 			m_temp *= m_coolingFactor;
 
-		quit = it > m_iterations || quit;
+		quit = it > maxIterations || quit;
 		++it;
 
-		pluginProgress->progress(it, m_iterations + 1);
-		if (pluginProgress->state() != tlp::TLP_CONTINUE) {
-			break;
-		}
+		// pluginProgress->progress(it, maxIterations + 1);
+		// if (pluginProgress->state() != tlp::TLP_CONTINUE) {
+		// 	break;
+		// }
 	}
-
 	deleteTree(kdTree);
-
-	// update result property
-	#pragma omp parallel for
-	for (unsigned int i = 0; i < graph->numberOfNodes(); i++) { 
-		result->setNodeValue(m_nodesCopy[i], m_pos[m_nodesCopy[i]]);
-	}
-
-	if (!tlp::ConnectedTest::isConnected(graph)) { // pack connected components
-		std::string errorMessage;
-		tlp::LayoutProperty tmpLayout(graph);
-		tlp::DataSet ds;
-		ds.set("coordinates", result);
-		graph->applyPropertyAlgorithm("Connected Component Packing", &tmpLayout, errorMessage, pluginProgress, &ds);
-		*result = tmpLayout;
-	}
-
-	auto end = std::chrono::high_resolution_clock::now();
-	std::chrono::duration<double> elapsed = end - start;
-	std::cout << "elapsed: " << elapsed.count() << std::endl;
-	std::cout << "Iterations done: " << it  << std::endl;
-
-	return true;
-}
-
-bool CustomLayout::init() {
-	bool btemp = false;
-	int itemp = 0;
-	float ftemp = 0.0f;
-	tlp::BooleanProperty *temp;
-	if (dataSet != nullptr) {
-		if (dataSet->get("max iterations", itemp))
-			m_iterations = itemp;
-		if (dataSet->get("refinement iterations", itemp))
-			m_refinementIterations = itemp;
-		if (dataSet->get("refinement frequency", itemp))
-			m_refinementFreq = itemp;
-		if (dataSet->get("max displacement", ftemp))
-			m_maxDisp = itemp;
-		if (dataSet->get("ideal edge length", ftemp))
-			m_L = ftemp;
-		if (dataSet->get("spring force strength", ftemp))
-			m_Ks = ftemp;
-		if (dataSet->get("repulsive force strength", ftemp))
-			m_Kr = ftemp;
-		if (dataSet->get("convergence threshold", ftemp))
-			m_threshold = ftemp;
-		if (dataSet->get("adaptive cooling", btemp))
-			m_adaptiveCooling = btemp;
-		if (dataSet->get("stopping criterion", btemp))
-			m_stoppingCriterion = btemp;
-		if (dataSet->get("multipole expansion", btemp))
-			m_multipoleExpansion = btemp;
-		if (dataSet->get("block nodes", btemp))
-			m_condition = btemp;
-		if (dataSet->get("refinement", btemp))
-			m_refinement = btemp;
-		if (dataSet->get("movable nodes", temp))
-			m_canMove = temp;
-		else if (m_condition) {
-			pluginProgress->setError("\"block nodes\" parameter is true but no BooleanProperty was given. Check parameter \"movable nodes\"");
-			return false;
-		}
-	}
-	
-	result->copy(graph->getProperty<tlp::LayoutProperty>("viewLayout"));
-	result->setAllEdgeValue(std::vector<tlp::Vec3f>(0));
-
-	m_size = graph->getLocalProperty<tlp::SizeProperty>("viewSize");
-	m_rot = graph->getLocalProperty<tlp::DoubleProperty>("viewRotation");
-
-	tlp::BoundingBox bb = tlp::computeBoundingBox(graph, result, m_size, m_rot);
-	m_temp = m_cstInitTemp ? m_initTemp : std::max(std::min(bb.width(), bb.height()) * m_initTempFactor, 2 * m_L);
-
-	m_nodesCopy = graph->nodes();
-	for (auto n : m_nodesCopy) {
-		m_energy[n] = 0;
-		m_disp[n] = tlp::Coord(0, 0, 0);
-		m_dispPrev[n] = tlp::Coord(0, 0, 0);
-		m_pos[n] = result->getNodeValue(n);
-	}
-	return true;
+	return it;
 }
 
 float CustomLayout::adaptativeCool(const tlp::node &n) {
@@ -426,4 +448,25 @@ void CustomLayout::computeReplForces(const tlp::node &n, KNode *kdTree, bool com
 		computeReplForces(n, kdTree->leftChild, computeEnergy);
 		computeReplForces(n, kdTree->rightChild, computeEnergy);
 	}
+}
+
+void CustomLayout::computeRefinement(double totalEnergy) {
+	totalEnergy /= m_nodesCopy.size();
+	for (unsigned int i = 0; i < m_nodesCopy.size(); ++i) {
+		m_highEnergy->setNodeValue(m_nodesCopy[i], ((m_energy[m_nodesCopy[i]] - totalEnergy) / totalEnergy) > m_highEnergyThreshold);
+		m_energy[m_nodesCopy[i]] = 0;
+	}	
+	tlp::BooleanProperty *canMoveTemp = m_canMove;
+	bool refinementTemp = m_refinement;
+	bool stoppingCriterionTemp = m_stoppingCriterion;
+	bool conditionTemp = m_condition;
+	m_stoppingCriterion = false;
+	m_refinement = false;
+	m_canMove = m_highEnergy;
+	m_condition = true;
+	mainLoop(m_refinementIterations);
+	m_refinement = refinementTemp;
+	m_canMove = canMoveTemp;
+	m_stoppingCriterion = stoppingCriterionTemp;
+	m_condition = conditionTemp;
 }

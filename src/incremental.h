@@ -5,13 +5,13 @@
 #include <tulip/Graph.h>
 #include <tulip/TulipPluginHeaders.h>
 
-class FMMMIncremental : public tlp::Algorithm {
+class Incremental : public tlp::Algorithm {
 public:
     PLUGININFORMATION("Incremental", "Melvin EVEN", "07/2018", "--", "1.0", "Incremental Layout")
     
-    FMMMIncremental(const tlp::PluginContext* context);
+    Incremental(const tlp::PluginContext* context);
 
-    ~FMMMIncremental() {
+    ~Incremental() {
         
     }
 
@@ -20,9 +20,9 @@ public:
     bool run() override;
 
 private:
-    float m_idealEdgeLength;
-    tlp::Color m_newColor;
-    tlp::Color m_adjToDeletedColor;
+    float m_idealEdgeLength; // Ideal edge length
+    tlp::Color m_newColor; // Color of new nodes
+    tlp::Color m_adjToDeletedColor; // Color of nodes who lost a neighbor
 
     /**
      * @brief Computes the differences between the 2 newest graphs in the timeline and stores them in the following properties: "isNewNode", "isNewEdge", "adjDeletedEdge"
