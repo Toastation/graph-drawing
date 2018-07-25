@@ -50,6 +50,7 @@ Incremental::Incremental(const tlp::PluginContext* context)
 	addInParameter<bool>("stopping criterion", "If true, stops the algo before the maximum number of iterations if the graph has converged. See \"convergence threshold\"", "", false);
 	addInParameter<bool>("multipole expansion", "If true, apply a 4-term multipole expansion for more accurate layout. May affect performances.", "", false);
 	addInParameter<bool>("refinement", "", "", false);	
+    addInParameter<bool>("pack CC", "pack connected components", "", false);
 	addInParameter<unsigned int>("max iterations", "The maximum number of iterations of the algorithm.", "300", false);
 	addInParameter<unsigned int>("max displacement", "The maximum length a node can move. Very high values or very low values may result in chaotic behavior.", "200", false);
 	addInParameter<unsigned int>("refinement iterations", "", "20", false);
@@ -68,6 +69,7 @@ bool Incremental::check(std::string &errorMessage) {
 
 bool Incremental::run() {
     tlp::DataSet ds;
+    m_packCC = false;
 	bool btemp = false;
 	int itemp = 0;
 	float ftemp = 0.0f;
@@ -98,6 +100,8 @@ bool Incremental::run() {
 			ds.set("multipole expansion", btemp);
 		if (dataSet->get("refinement", btemp))
 			ds.set("refinement", btemp);
+        if (dataSet->get("pack CC", btemp))
+            m_packCC = btemp;
 	}
 
     if (graph->numberOfSubGraphs() == 0)
@@ -128,11 +132,11 @@ bool Incremental::run() {
         currentColors->copy(globalColors);
         if (i > 0) { // no need to block nodes and compute differences for the first graph of the timeline
             computeDifference(subgraphs[i-1], subgraphs[i]);
-            positionNodes(subgraphs[i]);
+            positionNodes(subgraphs[i], subgraphs[i-1]);
             ds.set("block nodes", true);
             ds.set("movable nodes", subgraphs[i]->getLocalProperty<tlp::BooleanProperty>("canMove"));
         }
-        ds.set("pack connected components", i % 20 == 0); 
+        ds.set("pack connected components", m_packCC ? i % 20 == 0 : false); 
         subgraphs[i]->applyPropertyAlgorithm("Custom Layout", currentPos, errorMessage, nullptr, &ds);
         previousPos = currentPos;
         pluginProgress->progress(i, subgraphs.size());
@@ -188,23 +192,23 @@ bool Incremental::computeDifference(tlp::Graph *oldGraph, tlp::Graph *newGraph) 
     return true;    
 }
 
-bool Incremental::positionNodes(tlp::Graph *g) {
+bool Incremental::positionNodes(tlp::Graph *g, tlp::Graph *previous) {
     tlp::BooleanProperty *isNewNode = g->getLocalProperty<tlp::BooleanProperty>("isNewNode");
     tlp::BooleanProperty *isNewEdge = g->getLocalProperty<tlp::BooleanProperty>("isNewEdge");    
     tlp::BooleanProperty *adjacentToDeletedEdge = g->getLocalProperty<tlp::BooleanProperty>("adjDeletedEdge");
     tlp::BooleanProperty *canMove = g->getLocalProperty<tlp::BooleanProperty>("canMove");
     tlp::BooleanProperty *positioned = g->getLocalProperty<tlp::BooleanProperty>("positioned");
     tlp::LayoutProperty *pos = g->getLocalProperty<tlp::LayoutProperty>("viewLayout");
-    tlp::DoubleProperty *rot = g->getLocalProperty<tlp::DoubleProperty>("viewRotation");
-    tlp::SizeProperty *size = g->getLocalProperty<tlp::SizeProperty>("viewSize");
+    tlp::LayoutProperty *posPrev = previous->getLocalProperty<tlp::LayoutProperty>("viewLayout");
+    tlp::DoubleProperty *rotPrev = previous->getLocalProperty<tlp::DoubleProperty>("viewRotation");
+    tlp::SizeProperty *sizePrev = previous->getLocalProperty<tlp::SizeProperty>("viewSize");
     std::vector<tlp::node> newNodes;
     canMove->setAllNodeValue(false);
     positioned->setAllNodeValue(false);
     tlp::edge e;
     tlp::node n;
     tlp::node n2;
-    tlp::BoundingBox bb = tlp::computeBoundingBox(g, pos, size, rot);
-    std::srand(std::time(nullptr));
+    tlp::BoundingBox bb = tlp::computeBoundingBox(previous, posPrev, sizePrev, rotPrev);
 
     // mark already positioned nodes, and list the new nodes
     forEach(n, g->getNodes()) {
@@ -260,7 +264,8 @@ bool Incremental::positionNodes(tlp::Graph *g) {
             }
             unsigned int nbPositionedNeighbors = positionedNeighbors.size();
             if (nbPositionedNeighbors == 0) {
-                pos->setNodeValue(n, tlp::Vec3f(std::rand() % int(bb.width()), std::rand() % int(bb.height())));
+                float randomAngle = (float(std::rand()) / float(RAND_MAX)) * float(TAU); 
+                pos->setNodeValue(n, bb.center() + tlp::Vec3f(0.01f * std::cos(randomAngle), 0.01f * std::sin(randomAngle)));
             } else if (nbPositionedNeighbors == 1) {
                 float randomAngle = (float(std::rand()) / float(RAND_MAX)) * float(TAU);
                 pos->setNodeValue(n, pos->getNodeValue(positionedNeighbors[0]) + tlp::Vec3f(m_idealEdgeLength * std::cos(randomAngle), m_idealEdgeLength * std::sin(randomAngle)));

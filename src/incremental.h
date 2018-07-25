@@ -20,6 +20,7 @@ public:
     bool run() override;
 
 private:
+    bool m_packCC; // Whether or not to pack connected components
     float m_idealEdgeLength; // Ideal edge length
     tlp::Color m_newColor; // Color of new nodes
     tlp::Color m_adjToDeletedColor; // Color of nodes who lost a neighbor
@@ -37,7 +38,7 @@ private:
      * @param g The graph from which to position new nodes
      * @return true If the algo succeeded.
      */
-    bool positionNodes(tlp::Graph *g);
+    bool positionNodes(tlp::Graph *g, tlp::Graph *previous);
 };
 
 #endif

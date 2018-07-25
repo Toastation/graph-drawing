@@ -20,8 +20,7 @@ struct KNode {
 	KNode *leftChild; // Pointer to the left child
 	KNode *rightChild; // Pointer to the right child
 
-	KNode(unsigned int _start=0, unsigned int _end=0, float _radius=0, tlp::Coord _center=tlp::Coord(0)) 
-		: start(_start), end(_end), radius(_radius), center(_center) {
+	KNode(unsigned int _start=0, unsigned int _end=0, float _radius=0, tlp::Coord _center=tlp::Coord(0)) : start(_start), end(_end), radius(_radius), center(_center) {
 		a0 = 0;
 		leftChild = nullptr;
 		rightChild = nullptr;
@@ -133,7 +132,6 @@ private:
 	TLP_HASH_MAP<tlp::node, tlp::Coord> m_dispPrev; // Displacement of each during the previous iteration
 	TLP_HASH_MAP<tlp::node, tlp::Coord> m_pos; // Current position of each node
 	TLP_HASH_MAP<tlp::node, float> m_energy; // Current energy of each node
-
 
 	/**
 	 * @brief Prepares the algo (initialises hashmaps, etc) 
