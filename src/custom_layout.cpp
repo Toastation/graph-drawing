@@ -76,7 +76,10 @@ CustomLayout::~CustomLayout() {
 }
 
 bool CustomLayout::check(std::string &errorMessage) {
-	// TODO: check if the graph is simple
+	if (!tlp::SimpleTest::isSimple(graph)) {
+		tlp::SimpleTest::makeSimple(graph, m_removedEdges);
+		std::cout << "Graph was not simple, removed " << m_removedEdges.size() << " edges" << std::endl;
+	}
 	return true;
 }
 
@@ -91,8 +94,13 @@ bool CustomLayout::run() {
 	
 	// update result property
 	#pragma omp parallel for
-	for (unsigned int i = 0; i < graph->numberOfNodes(); i++) { 
+	for (unsigned int i = 0; i < graph->numberOfNodes(); ++i) { 
 		result->setNodeValue(m_nodesCopy[i], m_pos[m_nodesCopy[i]]);
+	}
+
+	// add the removed self loops and parallel edges, if they exist
+	for (unsigned int i = 0; i < m_removedEdges.size(); ++i) {
+		graph->addEdge(graph->source(m_removedEdges[i]), graph->target(m_removedEdges[i]));
 	}
 
 	if (m_packCC && !tlp::ConnectedTest::isConnected(graph)) { // pack connected components
@@ -185,8 +193,8 @@ unsigned int CustomLayout::mainLoop(unsigned int maxIterations) {
 	bool quit = false;
 	bool refinement = false;
 	unsigned int it = 1;
-	float averageDisp = 0;
-	float averageEnergy = 0;
+	float totalDisp = 0;
+	float totalEnergy = 0;
 
 	while (!quit) {
 		if (it <= 4 || it % 10 == 0)
@@ -234,32 +242,26 @@ unsigned int CustomLayout::mainLoop(unsigned int maxIterations) {
 					m_disp[n] *= cooledNorm / dispNorm;
 				}				
 			}
-			if (refinement)
-				averageEnergy += m_energy[n];
-			averageDisp += cooledNorm;
+			if (refinement) totalEnergy += m_energy[n];
+			totalDisp += cooledNorm;
 			m_pos[n] += m_disp[n];
 			m_dispPrev[n] = m_disp[n];
 			m_disp[n] = tlp::Coord(0);
 		}
 
 		// detect convergence
-		if (m_stoppingCriterion && averageDisp / m_nodesCopy.size() <= m_threshold)
+		if (m_stoppingCriterion && totalDisp <= m_threshold * m_nodesCopy.size()) // m_threshold is relative to the average disp, so we scale it
 			quit = true;
-		averageDisp = 0;
+		totalDisp = 0;
 
 		if (refinement || (quit && m_refinement))
-			computeRefinement(averageEnergy);
+			computeRefinement(totalEnergy);
 
 		if (!m_adaptiveCooling && !m_cstTemp)
 			m_temp *= m_coolingFactor;
 
 		quit = it > maxIterations || quit;
 		++it;
-
-		// pluginProgress->progress(it, maxIterations + 1);
-		// if (pluginProgress->state() != tlp::TLP_CONTINUE) {
-		// 	break;
-		// }
 	}
 	deleteTree(kdTree);
 	return it;
@@ -286,10 +288,7 @@ float CustomLayout::adaptativeCool(const tlp::node &n) {
 		scalar = 1.0f / 3; 
 	
 	float res = scalar * b_norm;
-	if (a_norm > res && res > 0)
-		return res;
-	else 
-		return a_norm;
+	return a_norm > res && res > 0 ? res : a_norm;
 }
 
 tlp::Coord CustomLayout::computeCenter(unsigned int start, unsigned int end) {
@@ -463,11 +462,12 @@ void CustomLayout::computeReplForces(const tlp::node &n, KNode *kdTree, bool com
 }
 
 void CustomLayout::computeRefinement(double totalEnergy) {
-	totalEnergy /= m_nodesCopy.size();
+	totalEnergy /= m_nodesCopy.size(); // now average energy
 	for (unsigned int i = 0; i < m_nodesCopy.size(); ++i) {
 		m_highEnergy->setNodeValue(m_nodesCopy[i], ((m_energy[m_nodesCopy[i]] - totalEnergy) / totalEnergy) > m_highEnergyThreshold);
 		m_energy[m_nodesCopy[i]] = 0;
 	}	
+	// save state, run the main loop, and then reload the state 
 	tlp::BooleanProperty *canMoveTemp = m_canMove;
 	bool refinementTemp = m_refinement;
 	bool stoppingCriterionTemp = m_stoppingCriterion;

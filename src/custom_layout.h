@@ -7,91 +7,11 @@
 #include <tulip/TulipPluginHeaders.h>
 #include <tulip/BooleanProperty.h>
 
+struct KNode;
+
 /**
- * @brief Node of a kd-tree, stores the necessary information to approximate the repulsive forces
+ * @brief Tulip plugin implementing a custom static graph drawing algorithm based on the Fast Multipole Method.
  */
-struct KNode {
-	unsigned int start; // First index of the sub-list of vertices of CustomLayout::m_nodesCopy
-	unsigned int end; // Last index of the sub-list of vertices of CustomLayout::m_nodesCopy
-	float radius; // Length between the center of gravity of the vertices and the farthest vertex
-	tlp::Coord center; // Center of gravity of the vertices
-	float a0; // First coefficient of the multipole expansion
-	std::vector<std::complex<float>> coefs; // Coefficents of the p-term sum. 
-	KNode *leftChild; // Pointer to the left child
-	KNode *rightChild; // Pointer to the right child
-
-	KNode(unsigned int _start=0, unsigned int _end=0, float _radius=0, tlp::Coord _center=tlp::Coord(0)) 
-		: start(_start), end(_end), radius(_radius), center(_center) {
-		a0 = 0;
-		leftChild = nullptr;
-		rightChild = nullptr;
-	}
-
-	~KNode() {
-		
-	}
-
-	//*********** DEBUG
-	bool isLeaf() {
-		return leftChild == nullptr && rightChild == nullptr;
-	}
-
-	float depth() {
-		if (isLeaf()) 
-			return 0;
-		return 1 + std::max(leftChild->depth(), rightChild->depth());
-	}
-
-	unsigned int size() {
-		if (isLeaf())
-			return 1;
-		unsigned int s = 1;
-		if (leftChild != nullptr)
-			s += leftChild->size(); 
-		if (rightChild != nullptr)
-			s += rightChild->size();
-		return s;
-	}
-	
-	void print() {
-		std::cout << "start: " << start << " | end: " << end << " | span: " << end - start << std::endl;
-		std::cout << "center: " << center << " | radius: " << radius << " | depth: " << depth() << std::endl;
-		std::cout << "leftChild: " << leftChild << " | rightChild: " << rightChild << std::endl;
-		for (unsigned int i = 0; i < 4; ++i) {
-			std::cout << "coef" << i << " = " << coefs[i] << std::endl;
-		}
-		std::cout << "----------------" << std::endl;
-		if (leftChild != nullptr)
-			leftChild->print();
-		if (rightChild != nullptr)
-			rightChild->print();
-	}
-
-	void printLeaf() {
-		if (isLeaf())
-			print();
-		else {
-			if (leftChild != nullptr)
-				leftChild->printLeaf();
-			if (rightChild != nullptr)
-				rightChild->printLeaf();
-		}
-	}
-	//*********** END DEBUG
-};
-
-void deleteTree(KNode *tree) {
-	if (tree->leftChild != nullptr) {
-		deleteTree(tree->leftChild);
-		tree->leftChild = nullptr;
-	}
-	if (tree->rightChild != nullptr) {
-		deleteTree(tree->rightChild);
-		tree->rightChild = nullptr;
-	}
-	delete tree;
-}
-
 class CustomLayout : public tlp::LayoutAlgorithm {
 public:
 	PLUGININFORMATION("Custom Layout", "Melvin EVEN", "07/2018", "--", "1.0", "Force Directed")
@@ -129,11 +49,11 @@ private:
 	tlp::SizeProperty *m_size; // viewSize
 	tlp::DoubleProperty *m_rot;	// viewRotation
 	std::vector<tlp::node> m_nodesCopy; // Copy of the graph's nodes, /!\ the order is NOT fixed
+	std::vector<tlp::edge> m_removedEdges; // List of removed edges when the graph was made simple
 	TLP_HASH_MAP<tlp::node, tlp::Coord> m_disp; // Displacement of each node
 	TLP_HASH_MAP<tlp::node, tlp::Coord> m_dispPrev; // Displacement of each during the previous iteration
 	TLP_HASH_MAP<tlp::node, tlp::Coord> m_pos; // Current position of each node
 	TLP_HASH_MAP<tlp::node, float> m_energy; // Current energy of each node
-
 
 	/**
 	 * @brief Prepares the algo (initialises hashmaps, etc) 
@@ -253,3 +173,88 @@ private:
 		return (m_Ks / 9.0f) * (distNorm * distNorm * distNorm * (std::log(distNorm / m_L) - 1) + (m_L * m_L * m_L));
 	}
 };
+
+/**
+ * @brief Node of a kd-tree, stores the necessary information to approximate the repulsive forces
+ */
+struct KNode {
+	unsigned int start; // First index of the sub-list of vertices of CustomLayout::m_nodesCopy
+	unsigned int end; // Last index of the sub-list of vertices of CustomLayout::m_nodesCopy
+	float radius; // Length between the center of gravity of the vertices and the farthest vertex
+	tlp::Coord center; // Center of gravity of the vertices
+	float a0; // First coefficient of the multipole expansion
+	std::vector<std::complex<float>> coefs; // Coefficents of the p-term sum. 
+	KNode *leftChild; // Pointer to the left child
+	KNode *rightChild; // Pointer to the right child
+
+	KNode(unsigned int _start=0, unsigned int _end=0, float _radius=0, tlp::Coord _center=tlp::Coord(0)) 
+		: start(_start), end(_end), radius(_radius), center(_center) {
+		a0 = 0;
+		leftChild = nullptr;
+		rightChild = nullptr;
+	}
+
+	~KNode() {
+		
+	}
+
+	//*********** DEBUG
+	bool isLeaf() {
+		return leftChild == nullptr && rightChild == nullptr;
+	}
+
+	float depth() {
+		if (isLeaf()) 
+			return 0;
+		return 1 + std::max(leftChild->depth(), rightChild->depth());
+	}
+
+	unsigned int size() {
+		if (isLeaf())
+			return 1;
+		unsigned int s = 1;
+		if (leftChild != nullptr)
+			s += leftChild->size(); 
+		if (rightChild != nullptr)
+			s += rightChild->size();
+		return s;
+	}
+	
+	void print() {
+		std::cout << "start: " << start << " | end: " << end << " | span: " << end - start << std::endl;
+		std::cout << "center: " << center << " | radius: " << radius << " | depth: " << depth() << std::endl;
+		std::cout << "leftChild: " << leftChild << " | rightChild: " << rightChild << std::endl;
+		for (unsigned int i = 0; i < 4; ++i) {
+			std::cout << "coef" << i << " = " << coefs[i] << std::endl;
+		}
+		std::cout << "----------------" << std::endl;
+		if (leftChild != nullptr)
+			leftChild->print();
+		if (rightChild != nullptr)
+			rightChild->print();
+	}
+
+	void printLeaf() {
+		if (isLeaf())
+			print();
+		else {
+			if (leftChild != nullptr)
+				leftChild->printLeaf();
+			if (rightChild != nullptr)
+				rightChild->printLeaf();
+		}
+	}
+	//*********** END DEBUG
+};
+
+void deleteTree(KNode *tree) {
+	if (tree->leftChild != nullptr) {
+		deleteTree(tree->leftChild);
+		tree->leftChild = nullptr;
+	}
+	if (tree->rightChild != nullptr) {
+		deleteTree(tree->rightChild);
+		tree->rightChild = nullptr;
+	}
+	delete tree;
+}
