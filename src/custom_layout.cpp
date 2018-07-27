@@ -85,9 +85,6 @@ bool CustomLayout::run() {
 		return false;
 
 	std::cout << "Initial temperature: " << m_temp << std::endl;
-	// std::string message = "Initial temperature: ";
-	// message += std::to_string(m_temp);
-	// pluginProgress->setComment(message);
 	auto start = std::chrono::high_resolution_clock::now();
 
 	unsigned int it = mainLoop(m_iterations);
@@ -121,6 +118,8 @@ bool CustomLayout::init() {
 	int itemp = 0;
 	float ftemp = 0.0f;
 	tlp::BooleanProperty *temp;
+
+	// receive user's data
 	if (dataSet != nullptr) {
 		if (dataSet->get("max iterations", itemp))
 			m_iterations = itemp;
@@ -160,6 +159,7 @@ bool CustomLayout::init() {
 		}
 	}
 	
+	// initialise hashmaps and temperature
 	result->copy(graph->getProperty<tlp::LayoutProperty>("viewLayout"));
 	result->setAllEdgeValue(std::vector<tlp::Vec3f>(0));
 
@@ -190,10 +190,9 @@ unsigned int CustomLayout::mainLoop(unsigned int maxIterations) {
 
 	while (!quit) {
 		if (it <= 4 || it % 10 == 0)
-			buildKdTree(true, kdTree);
+			buildKdTree(true, kdTree); // refresh the kd-tree
 
-		// no need to refine if there are no blocked nodes...
-		refinement = m_condition && m_refinement && it > 0 && it % m_refinementFreq == 0;
+		refinement = m_condition && m_refinement && it > 0 && it % m_refinementFreq == 0; // no need to refine if there are no blocked nodes...
 
 		// compute repulsive forces
 		#pragma omp parallel for
@@ -222,7 +221,7 @@ unsigned int CustomLayout::mainLoop(unsigned int maxIterations) {
 
 		// update nodes position
 		#pragma omp parallel for
-		for (unsigned int i = 0; i < m_nodesCopy.size(); i++) { // update positions
+		for (unsigned int i = 0; i < m_nodesCopy.size(); i++) {
 			const tlp::node &n = m_nodesCopy[i];
 			float dispNorm = m_disp[n].norm();
 			float cooledNorm = dispNorm;
@@ -243,6 +242,7 @@ unsigned int CustomLayout::mainLoop(unsigned int maxIterations) {
 			m_disp[n] = tlp::Coord(0);
 		}
 
+		// detect convergence
 		if (m_stoppingCriterion && averageDisp / m_nodesCopy.size() <= m_threshold)
 			quit = true;
 		averageDisp = 0;
@@ -271,18 +271,21 @@ float CustomLayout::adaptativeCool(const tlp::node &n) {
 	float a_norm = a.norm();
 	float b_norm = b.norm();
 	float angle = std::atan2(a.x() * b.y() - a.y() * b.x(), a.x() * b.x() + a.y() * b.y()); // atan2(det, dot)
-	float c;
+	float scalar;
+
+	// assign a scalar to b based on the angle between a and b
 	if (-fPI_6 <= angle && angle <= fPI_6)
-		c = 2;
+		scalar = 2;
 	else if ((fPI_6 < angle && angle <= f2_PI_6) || (-f2_PI_6 <= angle && angle < -fPI_6))
-		c = 3.0f / 2;
+		scalar = 3.0f / 2;
 	else if ((f2_PI_6 < angle && angle <= f3_PI_6) || (-f3_PI_6 <= angle && angle < -f2_PI_6))
-		c = 1;
+		scalar = 1;
 	else if ((f3_PI_6 < angle && angle <= f4_PI_6) || (-f4_PI_6 <= angle && angle < -f3_PI_6))
-		c = 2.0f / 3;
+		scalar = 2.0f / 3;
 	else
-		c = 1.0f / 3; 
-	float res = c * b_norm;
+		scalar = 1.0f / 3; 
+	
+	float res = scalar * b_norm;
 	if (a_norm > res && res > 0)
 		return res;
 	else 
@@ -320,6 +323,8 @@ void CustomLayout::buildKdTreeAux(KNode *node, unsigned int level, bool refresh)
 	auto medianIt = m_nodesCopy.begin() + medianIndex;
 	auto startIt = m_nodesCopy.begin() + node->start;
 	auto endIt = m_nodesCopy.begin() + node->end;
+
+	// find the median and rearrange m_nodesCopy around it
 	if (level % 2 == 0) {
 		std::nth_element(startIt, medianIt, endIt, [this](tlp::node &a, tlp::node &b) { 
 			return m_pos[a].x() < m_pos[b].x();
@@ -337,6 +342,8 @@ void CustomLayout::buildKdTreeAux(KNode *node, unsigned int level, bool refresh)
 			return m_pos[a].y() < medianY;
 		});
 	}
+
+	// compute the new center and radius
 	tlp::Coord leftCenter = computeCenter(node->start, medianIndex);
 	tlp::Coord rightCenter = computeCenter(medianIndex, node->end);
 	float leftRadius = computeRadius(node->start, medianIndex, leftCenter);
@@ -350,10 +357,13 @@ void CustomLayout::buildKdTreeAux(KNode *node, unsigned int level, bool refresh)
 		node->leftChild = new KNode(node->start, medianIndex, leftRadius, leftCenter);
 		node->rightChild = new KNode(medianIndex, node->end, rightRadius, rightCenter);
 	}
+
+	// compute the multipolar expansion coefficients
 	if (m_multipoleExpansion) {
 		computeCoef(node->leftChild);
 		computeCoef(node->rightChild);
 	}
+
 	if (std::min(medianIndex - node->start, node->end - medianIndex) <= m_maxPartitionSize) return;
 	#pragma omp task
 	buildKdTreeAux(node->leftChild, level + 1, refresh);
@@ -367,6 +377,7 @@ KNode* CustomLayout::buildKdTree(bool refresh, KNode *root=nullptr) {
 		return root;
 	}
 	
+	// compute the center, radius and start the recursion 
 	tlp::Coord center = computeCenter(0, m_nodesCopy.size());
 	float radius = computeRadius(0, m_nodesCopy.size(), center);
 	if (refresh) {
@@ -376,6 +387,7 @@ KNode* CustomLayout::buildKdTree(bool refresh, KNode *root=nullptr) {
 		root = new KNode(0, m_nodesCopy.size(), radius, center);
 	}
 
+	// compute the multipolar expansion coefficients
 	if (m_multipoleExpansion)
 		computeCoef(root);
 	
@@ -412,6 +424,8 @@ void CustomLayout::computeReplForces(const tlp::node &n, KNode *kdTree, bool com
 	}
 	tlp::Coord dist = m_pos[n] - kdTree->center;
 	float distNorm = dist.norm();
+
+	// leaf node -> compute the extact repulsive forces
 	if (kdTree->leftChild == nullptr && kdTree->rightChild == nullptr) {
 		for (unsigned int i = kdTree->start; i < kdTree->end; ++i) {
 			const tlp::node &v = m_nodesCopy[i];
@@ -425,6 +439,8 @@ void CustomLayout::computeReplForces(const tlp::node &n, KNode *kdTree, bool com
 		}
 		return;
 	}
+
+	// internal node -> approximate the forces if outside of the bounds, else continue the recursion 
 	if (distNorm > kdTree->radius) {	
 		if (!m_multipoleExpansion) {
 			dist *= (kdTree->end - kdTree->start) * computeReplForce(dist);
