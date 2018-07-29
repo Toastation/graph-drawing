@@ -22,8 +22,18 @@ public:
 private:
     bool m_packCC; // Whether or not to pack connected components
     float m_idealEdgeLength; // Ideal edge length
+    tlp::DataSet ds;
     tlp::Color m_newColor; // Color of new nodes
     tlp::Color m_adjToDeletedColor; // Color of nodes who lost a neighbor
+    TLP_HASH_MAP<tlp::node, bool> m_oldGraphNodes;
+    TLP_HASH_MAP<tlp::edge, bool> m_oldGraphEdges;
+    TLP_HASH_MAP<tlp::node, bool> m_newGraphNodes;
+    TLP_HASH_MAP<tlp::edge, bool> m_newGraphEdges;
+
+    /**
+     * @brief Receive the user's data 
+     */
+    void init();
 
     /**
      * @brief Computes the differences between the 2 newest graphs in the timeline and stores them in the following properties: "isNewNode", "isNewEdge", "adjDeletedEdge"

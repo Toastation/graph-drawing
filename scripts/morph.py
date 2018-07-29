@@ -10,7 +10,7 @@ def main(graph):
     previous_pos = tlp.LayoutProperty(graph)
     color = graph.getColorProperty("viewColor")
     it = 0
-    steps = 1000
+    steps = 100
     for g in graph.getSubGraphs():
         print(g)
         sg_pos = g.getLocalLayoutProperty("viewLayout")

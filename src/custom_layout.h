@@ -54,7 +54,7 @@ private:
 	TLP_HASH_MAP<tlp::node, tlp::Coord> m_dispPrev; // Displacement of each during the previous iteration
 	TLP_HASH_MAP<tlp::node, tlp::Coord> m_pos; // Current position of each node
 	TLP_HASH_MAP<tlp::node, float> m_energy; // Current energy of each node
-
+	
 	/**
 	 * @brief Prepares the algo (initialises hashmaps, etc) 
 	 * @return Returns whether or not the initalisation was successful

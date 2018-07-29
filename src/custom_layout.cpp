@@ -166,7 +166,7 @@ bool CustomLayout::init() {
 			return false;
 		}
 	}
-	
+
 	// initialise hashmaps and temperature
 	result->copy(graph->getProperty<tlp::LayoutProperty>("viewLayout"));
 	result->setAllEdgeValue(std::vector<tlp::Vec3f>(0));

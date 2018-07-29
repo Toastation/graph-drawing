@@ -24,26 +24,6 @@ const float DEFAULT_IDEAL_EDGE_LENGTH = 20.0f;
 const tlp::Color DEFAULT_NEW_COLOR = tlp::Color(18, 173, 42);
 const tlp::Color DEFAULT_ADJ_TO_DELETED_COLOR = tlp::Color(180, 10, 0);
 
-/**
- * @brief Returns true if the element is in the iterator.
- * @param it The iterator to search through.
- * @param elem The element to search for.
- * @return true if the element is in the iterator.
- */
-template<class T>
-bool isInIterator(tlp::Iterator<T> *it, T elem) {
-    if (!it) {
-        std::cerr << "Invalid argument \'it\' in isIn()" << std::endl;
-        return false;
-    }
-    while (it->hasNext()) {
-        if (elem == it->next()) {
-            return true;
-        }
-    }
-    return false;
-} 
-
 Incremental::Incremental(const tlp::PluginContext* context) 
     : tlp::Algorithm(context), m_idealEdgeLength(DEFAULT_IDEAL_EDGE_LENGTH), m_newColor(DEFAULT_NEW_COLOR), m_adjToDeletedColor(DEFAULT_ADJ_TO_DELETED_COLOR) {
     addInParameter<bool>("adaptive cooling", "If true, the algo uses a local cooling function based on the angle between each node's movement. Else it uses a global linear cooling function.", "", false);
@@ -68,7 +48,48 @@ bool Incremental::check(std::string &errorMessage) {
 }
 
 bool Incremental::run() {
-    tlp::DataSet ds;
+    init();
+
+    if (graph->numberOfSubGraphs() == 0)
+        pluginProgress->setError("There is no timeline!");
+
+    std::vector<tlp::Graph *> subgraphs;
+    std::string errorMessage;
+    tlp::Graph *g;
+    forEach (g, graph->getSubGraphs()) {
+        subgraphs.push_back(g);
+    }
+
+    // TODO: we should check the order of the subgraphs, right now it's the responsability of the user
+
+    tlp::ColorProperty *globalColors = graph->getProperty<tlp::ColorProperty>("viewColor");     
+    tlp::LayoutProperty *previousPos = graph->getProperty<tlp::LayoutProperty>("viewLayout");
+    tlp::LayoutProperty *currentPos;
+    tlp::ColorProperty *currentColors;
+    std::string message;
+    for (unsigned int i = 0; i < subgraphs.size(); ++i) {
+        message = "Computing timeline... " + i;
+        message += "/ " + subgraphs.size();
+        pluginProgress->setComment(message);
+        currentPos = subgraphs[i]->getLocalProperty<tlp::LayoutProperty>("viewLayout"); // overwriting global property "viewLayout", it is now empty however
+        currentColors = subgraphs[i]->getLocalProperty<tlp::ColorProperty>("viewColor");     
+        currentPos->copy(previousPos);
+        currentColors->copy(globalColors);
+        if (i > 0) { // no need to block nodes and compute differences for the first graph of the timeline
+            computeDifference(subgraphs[i-1], subgraphs[i]);
+            positionNodes(subgraphs[i], subgraphs[i-1]);
+            ds.set("block nodes", true);
+            ds.set("movable nodes", subgraphs[i]->getLocalProperty<tlp::BooleanProperty>("canMove"));
+        }
+        ds.set("pack connected components", m_packCC ? i % 20 == 0 : false); 
+        subgraphs[i]->applyPropertyAlgorithm("Custom Layout", currentPos, errorMessage, nullptr, &ds);
+        previousPos = currentPos;
+        pluginProgress->progress(i, subgraphs.size());
+    }
+    return true;
+}
+
+void Incremental::init() {
     m_packCC = false;
 	bool btemp = false;
 	int itemp = 0;
@@ -103,45 +124,6 @@ bool Incremental::run() {
         if (dataSet->get("pack CC", btemp))
             m_packCC = btemp;
 	}
-
-    if (graph->numberOfSubGraphs() == 0)
-        pluginProgress->setError("There is no timeline!");
-
-    std::vector<tlp::Graph *> subgraphs;
-    std::string errorMessage;
-    tlp::Graph *g;
-    forEach (g, graph->getSubGraphs()) {
-        subgraphs.push_back(g);
-    }
-
-    // TODO: we should check the order of the subgraphs, right now it's the responsability of the user
-
-    tlp::ColorProperty *globalColors = graph->getProperty<tlp::ColorProperty>("viewColor");     
-    tlp::LayoutProperty *previousPos = graph->getProperty<tlp::LayoutProperty>("viewLayout");
-    tlp::LayoutProperty *currentPos;
-    tlp::ColorProperty *currentColors;
-    std::string message;
-
-    for (unsigned int i = 0; i < subgraphs.size(); ++i) {
-        message = "Computing timeline... " + i;
-        message += "/ " + subgraphs.size();
-        pluginProgress->setComment(message);
-        currentPos = subgraphs[i]->getLocalProperty<tlp::LayoutProperty>("viewLayout"); // overwriting global property "viewLayout", it is now empty however
-        currentColors = subgraphs[i]->getLocalProperty<tlp::ColorProperty>("viewColor");     
-        currentPos->copy(previousPos);
-        currentColors->copy(globalColors);
-        if (i > 0) { // no need to block nodes and compute differences for the first graph of the timeline
-            computeDifference(subgraphs[i-1], subgraphs[i]);
-            positionNodes(subgraphs[i], subgraphs[i-1]);
-            ds.set("block nodes", true);
-            ds.set("movable nodes", subgraphs[i]->getLocalProperty<tlp::BooleanProperty>("canMove"));
-        }
-        ds.set("pack connected components", m_packCC ? i % 20 == 0 : false); 
-        subgraphs[i]->applyPropertyAlgorithm("Custom Layout", currentPos, errorMessage, nullptr, &ds);
-        previousPos = currentPos;
-        pluginProgress->progress(i, subgraphs.size());
-    }
-    return true;
 }
 
 bool Incremental::computeDifference(tlp::Graph *oldGraph, tlp::Graph *newGraph) {
@@ -157,9 +139,22 @@ bool Incremental::computeDifference(tlp::Graph *oldGraph, tlp::Graph *newGraph) 
     tlp::node n;
     tlp::edge e;
 
+    for (unsigned int i = 0; i < oldGraph->numberOfNodes(); ++i) {
+        m_oldGraphNodes[oldGraph->nodes()[i]] = true;
+    }
+    for (unsigned int i = 0; i < newGraph->numberOfNodes(); ++i) {
+        m_newGraphNodes[newGraph->nodes()[i]] = true;
+    }
+    for (unsigned int i = 0; i < oldGraph->numberOfEdges(); ++i) {
+        m_oldGraphEdges[oldGraph->edges()[i]] = true;
+    }
+    for (unsigned int i = 0; i < newGraph->numberOfEdges(); ++i) {
+        m_newGraphEdges[newGraph->edges()[i]] = true;
+    }
+
     // mark new nodes
     forEach(n, newGraph->getNodes()) {
-        if (!isInIterator<tlp::node>(oldGraph->getNodes(), n)) {
+        if (m_oldGraphNodes.find(n) == m_oldGraphNodes.end()) { // we find if the node exist in a graph with a hashmap
             isNewNode->setNodeValue(n, true);
             colors->setNodeValue(n, m_newColor);
         }
@@ -167,7 +162,7 @@ bool Incremental::computeDifference(tlp::Graph *oldGraph, tlp::Graph *newGraph) 
 
     // mark new edges
     forEach(e, newGraph->getEdges()) {
-        if (!isInIterator<tlp::edge>(oldGraph->getEdges(), e)) {
+        if (m_oldGraphEdges.find(e) == m_oldGraphEdges.end()) {
             isNewEdge->setEdgeValue(e, true);
             colors->setEdgeValue(e, m_newColor);
         }
@@ -175,15 +170,15 @@ bool Incremental::computeDifference(tlp::Graph *oldGraph, tlp::Graph *newGraph) 
 
     // mark nodes who lost a neighbor
     forEach(e, oldGraph->getEdges()) {
-        if (!isInIterator<tlp::edge>(newGraph->getEdges(), e)) {
+        if (m_newGraphEdges.find(e) == m_newGraphEdges.end()) {
             isNewEdge->setEdgeValue(e, true);
             source = oldGraph->source(e);
             target = oldGraph->target(e);
-            if (isInIterator<tlp::node>(newGraph->getNodes(), source)) {
+            if (m_newGraphNodes.find(source) != m_newGraphNodes.end()) {
                 adjacentToDeletedEdge->setNodeValue(source, true);
                 colors->setNodeValue(source, m_adjToDeletedColor);
             }
-            if (isInIterator<tlp::node>(newGraph->getNodes(), target)) {
+            if (m_newGraphNodes.find(target) != m_newGraphNodes.end()) {
                 adjacentToDeletedEdge->setNodeValue(target, true);
                 colors->setNodeValue(target, m_adjToDeletedColor);
             }
@@ -212,7 +207,6 @@ bool Incremental::positionNodes(tlp::Graph *g, tlp::Graph *previous) {
 
     // mark already positioned nodes, and list the new nodes
     forEach(n, g->getNodes()) {
-        std::cout << pos->getNodeValue(n) << std::endl;
         if (adjacentToDeletedEdge->getNodeValue(n))
             canMove->setNodeValue(n, true);
         if (!isNewNode->getNodeValue(n))
@@ -265,7 +259,7 @@ bool Incremental::positionNodes(tlp::Graph *g, tlp::Graph *previous) {
             unsigned int nbPositionedNeighbors = positionedNeighbors.size();
             if (nbPositionedNeighbors == 0) {
                 float randomAngle = (float(std::rand()) / float(RAND_MAX)) * float(TAU); 
-                pos->setNodeValue(n, bb.center() + tlp::Vec3f(0.01f * std::cos(randomAngle), 0.01f * std::sin(randomAngle)));
+                pos->setNodeValue(n, bb.center() + tlp::Vec3f(std::cos(randomAngle), std::sin(randomAngle)));
             } else if (nbPositionedNeighbors == 1) {
                 float randomAngle = (float(std::rand()) / float(RAND_MAX)) * float(TAU);
                 pos->setNodeValue(n, pos->getNodeValue(positionedNeighbors[0]) + tlp::Vec3f(m_idealEdgeLength * std::cos(randomAngle), m_idealEdgeLength * std::sin(randomAngle)));
