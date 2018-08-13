@@ -38,7 +38,8 @@ private:
 	float m_temp; // Global temperature of the graph
 	float m_threshold; // The convergence threshold
 	float m_maxDisp; // Maximum displament allowed for nodes.
-	float m_highEnergyThreshold;
+	float m_highEnergyThreshold; // Threshold that determines if a node has a high energy => how many times the distance between the node's energy and the avg energy 
+	float m_centerAttrFactor; // center attraction factor
 	unsigned int m_iterations; // Number of iterations
 	unsigned int m_refinementIterations; // Number of iterations of the refinement process
 	unsigned int m_refinementFreq; // Number of iterations in between refinement steps
@@ -54,7 +55,15 @@ private:
 	TLP_HASH_MAP<tlp::node, tlp::Coord> m_dispPrev; // Displacement of each during the previous iteration
 	TLP_HASH_MAP<tlp::node, tlp::Coord> m_pos; // Current position of each node
 	TLP_HASH_MAP<tlp::node, float> m_energy; // Current energy of each node
-	
+
+	/************************
+	 *  	   DEBUG		*
+	 ************************/
+	int m_gridX;
+	int m_gridY;
+	tlp::Coord m_center;
+	bool m_attract;
+
 	/**
 	 * @brief Prepares the algo (initialises hashmaps, etc) 
 	 * @return Returns whether or not the initalisation was successful
@@ -66,6 +75,12 @@ private:
 	 * @return The number of iterations done 
 	 */
 	unsigned int mainLoop(unsigned int maxIterations);
+
+	/**
+	 * @brief TODO
+	 * @return Whether or not the post processing was successful
+	 */
+	bool postProcessing();
 
 	/**
 	 * @brief Computes local temperature for each node 

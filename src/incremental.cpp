@@ -39,6 +39,8 @@ Incremental::Incremental(const tlp::PluginContext* context)
 	addInParameter<float>("spring force strength", "Factor of the spring force", "1", false);
 	addInParameter<float>("repulsive force strength", "Factor of the repulsive force", "100", false);
 	addInParameter<float>("convergence threshold", "If the average node energy is lower than this threshold, the graph is considered to have converged and the algorithm stops. Only taken into consideration if \"stopping criterion\" is true", "0.1", false);
+    addInParameter<float>("high energy threshold", "Threshold above which a node is consired to have a high energy", "1.0", false);	
+	addInParameter<float>("center attraction strength", "Strength of the attraction of nodes toward the center", "0.000001f", false);	
     addDependency("Custom Layout", "1.0");
 }
 
@@ -113,6 +115,8 @@ void Incremental::init() {
 			ds.set("convergence threshold", ftemp);
 		if (dataSet->get("high energy threshold", ftemp))
 			ds.set("high energy threshold", ftemp);
+        if (dataSet->get("center attraction strength", ftemp))
+			ds.set("center attraction strength", ftemp);
 		if (dataSet->get("adaptive cooling", btemp))
 			ds.set("adaptive cooling", btemp);
 		if (dataSet->get("stopping criterion", btemp))
@@ -139,6 +143,7 @@ bool Incremental::computeDifference(tlp::Graph *oldGraph, tlp::Graph *newGraph) 
     tlp::node n;
     tlp::edge e;
 
+    // initialise the hashmaps that are used to find a node/edge exist in constant time
     for (unsigned int i = 0; i < oldGraph->numberOfNodes(); ++i) {
         m_oldGraphNodes[oldGraph->nodes()[i]] = true;
     }
@@ -154,7 +159,7 @@ bool Incremental::computeDifference(tlp::Graph *oldGraph, tlp::Graph *newGraph) 
 
     // mark new nodes
     forEach(n, newGraph->getNodes()) {
-        if (m_oldGraphNodes.find(n) == m_oldGraphNodes.end()) { // we find if the node exist in a graph with a hashmap
+        if (m_oldGraphNodes.find(n) == m_oldGraphNodes.end()) {
             isNewNode->setNodeValue(n, true);
             colors->setNodeValue(n, m_newColor);
         }
@@ -204,7 +209,7 @@ bool Incremental::positionNodes(tlp::Graph *g, tlp::Graph *previous) {
     tlp::node n;
     tlp::node n2;
     tlp::BoundingBox bb = tlp::computeBoundingBox(previous, posPrev, sizePrev, rotPrev);
-
+    
     // mark already positioned nodes, and list the new nodes
     forEach(n, g->getNodes()) {
         if (adjacentToDeletedEdge->getNodeValue(n))

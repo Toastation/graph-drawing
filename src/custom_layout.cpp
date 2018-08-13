@@ -26,12 +26,15 @@ const float DEFAULT_COOLING_FACTOR = 0.95f;
 const float DEFAULT_THRESHOLD = 0.1f;
 const float DEFAULT_MAX_DISP = 200.0f;
 const float DEFAULT_HIGH_ENERGY_THRESHOlD = 1.0f;
+const float DEFAULT_CENTER_ATTR_FACTOR = 0.000001f;
 const float MULTIPOLE_EXPANSION_FACTOR = 100.0f;
 const unsigned int DEFAULT_REFINEMENT_ITERATIONS = 20;
 const unsigned int DEFAULT_REFINEMENT_FREQ = 30;
 const unsigned int DEFAULT_MAX_PARTITION_SIZE = 4;
 const unsigned int DEFAULT_PTERM = 4;
-const unsigned int DEFAUT_ITERATIONS = 300;
+const unsigned int DEFAULT_ITERATIONS = 300;
+const unsigned int DEFAULT_GRIDX = 50;
+const unsigned int DEFAULT_GRIDY = 50;
 
 const float fPI_6 = M_PI / 6.0f;
 const float f2_PI_6 = 2.0f * fPI_6;
@@ -43,8 +46,8 @@ PLUGIN(CustomLayout)
 CustomLayout::CustomLayout(const tlp::PluginContext *context) 
 	: LayoutAlgorithm(context), m_L(DEFAULT_L), m_Kr(DEFAULT_KR), m_Ks(DEFAULT_KS),
 	  m_initTemp(DEFAULT_INIT_TEMP), m_initTempFactor(DEFAULT_INIT_TEMP_FACTOR), m_coolingFactor(DEFAULT_COOLING_FACTOR), m_threshold(DEFAULT_THRESHOLD), m_maxDisp(DEFAULT_MAX_DISP), 
-	  m_highEnergyThreshold(DEFAULT_HIGH_ENERGY_THRESHOlD), m_iterations(DEFAUT_ITERATIONS), m_refinementIterations(DEFAULT_REFINEMENT_ITERATIONS), m_refinementFreq(DEFAULT_REFINEMENT_FREQ),
-	  m_maxPartitionSize(DEFAULT_MAX_PARTITION_SIZE), m_pTerm(DEFAULT_PTERM) {
+	  m_highEnergyThreshold(DEFAULT_HIGH_ENERGY_THRESHOlD), m_centerAttrFactor(DEFAULT_CENTER_ATTR_FACTOR), m_iterations(DEFAULT_ITERATIONS), m_refinementIterations(DEFAULT_REFINEMENT_ITERATIONS), m_refinementFreq(DEFAULT_REFINEMENT_FREQ),
+	  m_maxPartitionSize(DEFAULT_MAX_PARTITION_SIZE), m_pTerm(DEFAULT_PTERM), m_gridX(DEFAULT_GRIDX), m_gridY(DEFAULT_GRIDY) {
 	addInParameter<bool>("adaptive cooling", "If true, the algo uses a local cooling function based on the angle between each node's movement. Else it uses a global linear cooling function.", "", false);
 	addInParameter<bool>("stopping criterion", "If true, stops the algo before the maximum number of iterations if the graph has converged. See \"convergence threshold\"", "", false);
 	addInParameter<bool>("multipole expansion", "If true, apply a 4-term multipole expansion for more accurate layout. May affect performances.", "", false);
@@ -55,11 +58,14 @@ CustomLayout::CustomLayout(const tlp::PluginContext *context)
 	addInParameter<unsigned int>("max displacement", "The maximum length a node can move. Very high values or very low values may result in chaotic behavior.", "200", false);
 	addInParameter<unsigned int>("refinement iterations", "", "20", false);
 	addInParameter<unsigned int>("refinement frequency", "", "30", false);	
+	addInParameter<unsigned int>("gridX", "", "50", false);
+	addInParameter<unsigned int>("gridY", "", "50", false);	
 	addInParameter<float>("ideal edge length", "The ideal edge length.", "10", false);
 	addInParameter<float>("spring force strength", "Factor of the spring force", "1", false);
 	addInParameter<float>("repulsive force strength", "Factor of the repulsive force", "100", false);
 	addInParameter<float>("convergence threshold", "If the average node energy is lower than this threshold, the graph is considered to have converged and the algorithm stops. Only taken into consideration if \"stopping criterion\" is true", "0.1", false);
 	addInParameter<float>("high energy threshold", "Threshold above which a node is consired to have a high energy", "1.0", false);	
+	addInParameter<float>("center attraction strength", "Strength of the attraction of nodes toward the center", "0.000001f", false);	
 	addInParameter<tlp::BooleanProperty>("movable nodes", "Set of nodes allowed to move. Only taken into account if \"blocked nodes\" is true", "", false);
 	addDependency("Connected Component Packing (Polyomino)", "1.0");
 	m_cstTemp = false;
@@ -92,6 +98,9 @@ bool CustomLayout::run() {
 
 	unsigned int it = mainLoop(m_iterations);
 	
+	// if (!postProcessing()) 
+	// 	return false;
+
 	// update result property
 	#pragma omp parallel for
 	for (unsigned int i = 0; i < graph->numberOfNodes(); ++i) { 
@@ -103,15 +112,15 @@ bool CustomLayout::run() {
 		graph->addEdge(graph->source(m_removedEdges[i]), graph->target(m_removedEdges[i]));
 	}
 
-	if (m_packCC && !tlp::ConnectedTest::isConnected(graph)) { // pack connected components
-		std::string errorMessage;
-		tlp::DataSet ds;
-		ds.set("coordinates", result);
-		ds.set("node size", m_size);
-		ds.set("rotation", m_rot);
-		ds.set("margin", 50);
-		graph->applyPropertyAlgorithm("Connected Component Packing (Polyomino)", result, errorMessage, pluginProgress, &ds);
-	}
+	// if (m_packCC && !tlp::ConnectedTest::isConnected(graph)) { // pack connected components
+	// 	std::string errorMessage;
+	// 	tlp::DataSet ds;
+	// 	ds.set("coordinates", result);
+	// 	ds.set("node size", m_size);
+	// 	ds.set("rotation", m_rot);
+	// 	ds.set("margin", 50);
+	// 	graph->applyPropertyAlgorithm("Connected Component Packing (Polyomino)", result, errorMessage, pluginProgress, &ds);
+	// }
 
 	auto end = std::chrono::high_resolution_clock::now();
 	std::chrono::duration<double> elapsed = end - start;
@@ -123,20 +132,25 @@ bool CustomLayout::run() {
 
 bool CustomLayout::init() {
 	bool btemp = false;
+	unsigned int uitemp = 0;
 	int itemp = 0;
 	float ftemp = 0.0f;
 	tlp::BooleanProperty *temp;
 
 	// receive user's data
 	if (dataSet != nullptr) {
-		if (dataSet->get("max iterations", itemp))
-			m_iterations = itemp;
-		if (dataSet->get("refinement iterations", itemp))
-			m_refinementIterations = itemp;
-		if (dataSet->get("refinement frequency", itemp))
-			m_refinementFreq = itemp;
+		if (dataSet->get("max iterations", uitemp))
+			m_iterations = uitemp;
+		if (dataSet->get("refinement iterations", uitemp))
+			m_refinementIterations = uitemp;
+		if (dataSet->get("refinement frequency", uitemp))
+			m_refinementFreq = uitemp;
+		if (dataSet->get("gridX", itemp))
+			m_gridX = itemp;
+		if (dataSet->get("gridY", itemp))
+			m_gridY = itemp;
 		if (dataSet->get("max displacement", ftemp))
-			m_maxDisp = itemp;
+			m_maxDisp = uitemp;
 		if (dataSet->get("ideal edge length", ftemp))
 			m_L = ftemp;
 		if (dataSet->get("spring force strength", ftemp))
@@ -147,6 +161,8 @@ bool CustomLayout::init() {
 			m_threshold = ftemp;
 		if (dataSet->get("high energy threshold", ftemp))
 			m_highEnergyThreshold = ftemp;
+		if (dataSet->get("center attraction strength", ftemp))
+			m_centerAttrFactor = ftemp;
 		if (dataSet->get("adaptive cooling", btemp))
 			m_adaptiveCooling = btemp;
 		if (dataSet->get("stopping criterion", btemp))
@@ -177,6 +193,8 @@ bool CustomLayout::init() {
 
 	tlp::BoundingBox bb = tlp::computeBoundingBox(graph, result, m_size, m_rot);
 	m_temp = m_cstInitTemp ? m_initTemp : std::max(std::min(bb.width(), bb.height()) * m_initTempFactor, 2 * m_L);
+	m_center = bb.center();
+	m_attract = tlp::ConnectedTest::numberOfConnectedComponents(graph) > 1;
 
 	m_nodesCopy = graph->nodes();
 	for (auto n : m_nodesCopy) {
@@ -207,6 +225,11 @@ unsigned int CustomLayout::mainLoop(unsigned int maxIterations) {
 		for (unsigned int i = 0; i < m_nodesCopy.size(); ++i) {
 			if (!m_condition || m_canMove->getNodeValue(m_nodesCopy[i]))
 				computeReplForces(m_nodesCopy[i], kdTree, refinement);
+			if (m_attract) {
+				tlp::Coord dist = m_center - m_pos[m_nodesCopy[i]];
+				float norm = dist.norm();
+				m_disp[m_nodesCopy[i]] += m_centerAttrFactor * dist / (norm * norm);
+			}
 		}
 
 		//compute attractive forces TODO: find a way to parallelize
@@ -265,6 +288,38 @@ unsigned int CustomLayout::mainLoop(unsigned int maxIterations) {
 	}
 	deleteTree(kdTree);
 	return it;
+}
+
+bool CustomLayout::postProcessing() {
+	/* 
+	 * (1) Lock the center of CCs on a grid
+	 * (2?) Harmonize the distance between CCs
+	 */
+	std::vector<std::vector<tlp::node>> connectedComp;
+	tlp::Coord center(0);
+	float translationX;
+	float translationY;
+	tlp::ConnectedTest::computeConnectedComponents(graph, connectedComp);
+	for (auto cc : connectedComp) {
+		// compute center of CC
+		for (auto n : cc) {
+			center += m_pos[n];
+		}
+		center /= cc.size();
+		// compute translation
+		int modX = int(center.x()) % m_gridX;
+		int modY = int(center.y()) % m_gridY;
+		if (modX <= m_gridX / 2) translationX = -modX;
+		else translationX = m_gridX - modX;
+		if (modY <= m_gridY / 2) translationY = -modY;
+		else translationY = m_gridY - modY;
+		center += tlp::Coord(translationX, translationY);
+		// apply translation
+		for (auto n : cc) {
+			m_pos[n] += tlp::Coord(translationX, translationY);
+		}
+	}
+	return true;
 }
 
 float CustomLayout::adaptativeCool(const tlp::node &n) {
